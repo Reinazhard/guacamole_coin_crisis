@@ -72,6 +72,8 @@ blocks:
           commands:
             - echo "--- Building GCC for ${ARCH} / ${TARGET_TRIPLE} ---"
             - bash build.sh -a "${ARCH}"
+            - echo "--- Stripping binaries to reduce size ---"
+            - bash strip.sh "gcc-${ARCH}/"
             - echo "--- Packaging artifact ---"
             - tar -cJf "${ARTIFACT_NAME}.tar.xz" "gcc-${ARCH}/"
             - ls -lh "${ARTIFACT_NAME}.tar.xz"
@@ -107,6 +109,8 @@ blocks:
           commands:
             - echo "--- Building GCC for ${ARCH} / ${TARGET_TRIPLE} ---"
             - bash build.sh -a "${ARCH}"
+            - echo "--- Stripping binaries to reduce size ---"
+            - bash strip.sh "gcc-${ARCH}/"
             - echo "--- Packaging artifact ---"
             - tar -cJf "${ARTIFACT_NAME}.tar.xz" "gcc-${ARCH}/"
             - ls -lh "${ARTIFACT_NAME}.tar.xz"
