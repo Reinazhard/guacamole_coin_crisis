@@ -29,10 +29,7 @@ find "$CUR_DIR" -type f -exec file {} + > "$IDX" || true
 process_lines() {
 	local tool="$1"
 	sed 's/:[[:space:]].*//' | while IFS= read -r filepath; do
-		"$tool" "$filepath" 2>/dev/null || true
-	done
-}
-
+                "$tool" --strip-unneeded "$filepath" 2>/dev/null || true
 if [[ -n "$X86S" && -x "$X86S" ]]; then
 	log "Stripping x86 binaries using ${X86S}..."
 	grep "x86" "$IDX" | grep "not strip" | grep -v "relocatable" | process_lines "$X86S" || true
