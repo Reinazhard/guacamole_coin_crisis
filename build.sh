@@ -42,7 +42,7 @@ GCC_BRANCH="releases/gcc-15"
 
 usage() {
   echo "Usage: $0 -a <arch> [-p]"
-  echo "  -a  Target arch: arm | arm64 | arm64gnu | x86"
+  echo "  -a  Target arch: arm | arm64 | x86"
   echo "  -p  Enable PGO (Profile-Guided Optimisation) for the compiler itself"
   exit 1
 }
@@ -59,11 +59,10 @@ done
 
 # ── Target resolution ─────────────────────────────────────────────
 case "${arch}" in
-  "arm")      TARGET="arm-eabi" ;;
-  "arm64")    TARGET="aarch64-elf" ;;
-  "arm64gnu") TARGET="aarch64-linux-gnu" ;;
-  "x86")      TARGET="x86_64-elf" ;;
-  *)          die "Unknown arch '${arch}'. Valid: arm | arm64 | arm64gnu | x86" ;;
+  "arm")      TARGET="arm-linux-gnueabi" ;;
+  "arm64")    TARGET="aarch64-linux-gnu" ;;
+  "x86")      TARGET="x86_64-linux-gnu" ;;
+  *)          die "Unknown arch '${arch}'. Valid: arm | arm64 | x86" ;;
 esac
 
 # ── Paths ─────────────────────────────────────────────────────────
