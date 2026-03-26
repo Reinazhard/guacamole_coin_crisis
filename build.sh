@@ -61,13 +61,13 @@ case "${arch}" in
     TARGET="arm-linux-gnueabi"
     EXTRA_GCC_FLAGS="--with-fpu=crypto-neon-fp-armv8"
     TARGET_ARCH="armv8.2-a+crypto+dotprod+fp16+rcpc+ssbs+sb"
-    TARGET_TUNE="cortex-x1"
+    TARGET_TUNE="cortex-a76.cortex-a55"
     ;;
   "arm64")
     TARGET="aarch64-linux-gnu"
     EXTRA_GCC_FLAGS="--with-abi=lp64 --enable-fix-cortex-a53-835769 --enable-fix-cortex-a53-843419"
     TARGET_ARCH="armv8.2-a+crypto+dotprod+fp16+rcpc+ssbs+sb"
-    TARGET_TUNE="cortex-x1"
+    TARGET_TUNE="cortex-a76.cortex-a55"
     ;;
   "x86")
     TARGET="x86_64-linux-gnu"
@@ -128,10 +128,12 @@ export OPT_FLAGS
 #   +ssbs       — Speculative Store Bypass Safe (Spectre-v4 mitigation)
 #   +sb         — Speculation Barrier
 #
-# Tune = cortex-x1: schedules for the wide, out-of-order prime core.
-# Code that lands on A76/A55 still runs correctly; the schedule is just
-# biased toward the highest-throughput core (peak perf path).
-# Note: Variables are now set per-architecture in the parsing block above.
+# Tune = cortex-a76.cortex-a55: schedules for the wide,
+# OoO A76 and the small, in-order A55.  The resulting GCC will
+# generate code that runs well on both cores, which is ideal
+# for Android's heterogeneous big.LITTLE architecture and
+# the Pixel 6's specific CPU configuration.
+
 
 # ─────────────────────────────────────────────────────────────────
 log "Work dir : ${WORK_DIR}"
@@ -148,7 +150,7 @@ check_deps() {
     command -v "$cmd" &>/dev/null || missing+=("$cmd")
   done
   if [[ ${#missing[@]} -gt 0 ]]; then
-    die "Missing host tools: ${missing[*]}\nMake sure you have installed: clang llvm lld bison flex texinfo gawk"
+    die "Missing host tools: ${missing[*]}\nInstall with: sudo apt install ${missing[*]}"
   fi
 }
 
