@@ -59,10 +59,27 @@ done
 
 # ── Target resolution ─────────────────────────────────────────────
 case "${arch}" in
-  "arm")      TARGET="arm-linux-gnueabi" ;;
-  "arm64")    TARGET="aarch64-linux-gnu" ;;
-  "x86")      TARGET="x86_64-linux-gnu" ;;
-  *)          die "Unknown arch '${arch}'. Valid: arm | arm64 | x86" ;;
+  "arm")
+    TARGET="arm-linux-gnueabi"
+    EXTRA_GCC_FLAGS="--with-fpu=crypto-neon-fp-armv8"
+    TENSOR_ARCH="armv8.2-a+crypto+dotprod+fp16+rcpc+ssbs+sb"
+    TENSOR_TUNE="cortex-x1"
+    ;;
+  "arm64")
+    TARGET="aarch64-linux-gnu"
+    EXTRA_GCC_FLAGS="--with-abi=lp64 --enable-fix-cortex-a53-835769 --enable-fix-cortex-a53-843419"
+    TENSOR_ARCH="armv8.2-a+crypto+dotprod+fp16+rcpc+ssbs+sb"
+    TENSOR_TUNE="cortex-x1"
+    ;;
+  "x86")
+    TARGET="x86_64-linux-gnu"
+    EXTRA_GCC_FLAGS=""
+    TENSOR_ARCH="x86-64-v3"
+    TENSOR_TUNE="skylake"
+    ;;
+  *)
+    die "Unknown arch '${arch}'. Valid: arm | arm64 | x86"
+    ;;
 esac
 
 # ── Paths ─────────────────────────────────────────────────────────
@@ -116,9 +133,7 @@ export OPT_FLAGS
 # Tune = cortex-x1: schedules for the wide, out-of-order prime core.
 # Code that lands on A76/A55 still runs correctly; the schedule is just
 # biased toward the highest-throughput core (peak perf path).
-TENSOR_ARCH="armv8.2-a+crypto+dotprod+fp16+rcpc+ssbs+sb"
-TENSOR_TUNE="cortex-x1"
-TENSOR_ABI="lp64"
+# Note: Variables are now set per-architecture in the parsing block above.
 
 # ─────────────────────────────────────────────────────────────────
 log "Work dir : ${WORK_DIR}"
@@ -217,12 +232,7 @@ _configure_gcc() {
       `# ── Tensor G1 target defaults ─────────────────────────` \
       --with-arch="${TENSOR_ARCH}" \
       --with-tune="${TENSOR_TUNE}" \
-      --with-abi="${TENSOR_ABI}" \
-      --with-fpu=crypto-neon-fp-armv8 \
-      \
-      `# ── Errata workarounds (A55 shares A53 silicon quirks) ─` \
-      --enable-fix-cortex-a53-835769 \
-      --enable-fix-cortex-a53-843419 \
+      ${EXTRA_GCC_FLAGS} \
       \
       `# ── Language & runtime ────────────────────────────────` \
       --enable-languages=c,c++ \
@@ -308,7 +318,7 @@ _build_gcc_pgo() {
       --prefix="${STAGE1_PREFIX}" \
       --with-arch="${TENSOR_ARCH}" \
       --with-tune="${TENSOR_TUNE}" \
-      --with-abi="${TENSOR_ABI}" \
+      ${EXTRA_GCC_FLAGS} \
       --enable-languages=c,c++ \
       --enable-threads=posix \
       --enable-lto \
@@ -352,10 +362,7 @@ _build_gcc_pgo() {
       --prefix="$PREFIX" \
       --with-arch="${TENSOR_ARCH}" \
       --with-tune="${TENSOR_TUNE}" \
-      --with-abi="${TENSOR_ABI}" \
-      --with-fpu=crypto-neon-fp-armv8 \
-      --enable-fix-cortex-a53-835769 \
-      --enable-fix-cortex-a53-843419 \
+      ${EXTRA_GCC_FLAGS} \
       --enable-languages=c,c++ \
       --enable-threads=posix \
       --enable-default-ssp \
@@ -401,7 +408,7 @@ print_summary() {
   printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Target triple:"  "$TARGET"
   printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Architecture:"   "$TENSOR_ARCH"
   printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Tune for:"       "$TENSOR_TUNE (Cortex-X1 prime core)"
-  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "ABI:"            "$TENSOR_ABI"
+  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Extra Flags:"            "${EXTRA_GCC_FLAGS}"
   printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "PGO:"            "$ENABLE_PGO"
   printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Installed to:"   "$PREFIX"
   printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Total time:"     "$(elapsed)"
