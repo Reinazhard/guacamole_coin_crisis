@@ -110,7 +110,6 @@ HOST_OPT_FLAGS=(
   "-fomit-frame-pointer"        # free one register on x86-64
   "-ffunction-sections"         # allow linker to GC unused text sections
   "-fdata-sections"             # same for data
-  "-flto"                       # "Fat" (full) LTO for aggressive cross-module optimizations
   "-fuse-ld=lld"                # immensely faster than bfd/gold linker
 )
 OPT_FLAGS="${HOST_OPT_FLAGS[*]}"
