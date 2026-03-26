@@ -165,13 +165,15 @@ build_binutils() {
   log "Configuring binutils..."
   mkdir -p build-binutils && cd build-binutils
 
-  env CFLAGS="$OPT_FLAGS" CXXFLAGS="$OPT_FLAGS" \
+  env CFLAGS="$OPT_FLAGS" CXXFLAGS="$OPT_FLAGS" LDFLAGS="-static" \
     ../binutils/configure \
       --target="$TARGET" \
       --prefix="$PREFIX" \
       --with-sysroot \
       --with-arch="${TENSOR_ARCH}" \
       --with-tune="${TENSOR_TUNE}" \
+      --enable-static \
+      --disable-shared \
       --enable-plugins \
       --enable-relro \
       --enable-threads \
@@ -201,7 +203,7 @@ _configure_gcc() {
   # $1 = --prefix override (used during PGO bootstrap)
   local prefix="${1:-$PREFIX}"
 
-  env CFLAGS="$OPT_FLAGS" CXXFLAGS="$OPT_FLAGS" \
+  env CFLAGS="$OPT_FLAGS" CXXFLAGS="$OPT_FLAGS" LDFLAGS="-static" \
     ../gcc/configure \
       --target="$TARGET" \
       --prefix="$prefix" \
@@ -294,6 +296,7 @@ _build_gcc_pgo() {
   # Override OPT_FLAGS temporarily: add profiling instrumentation
   env CFLAGS="${OPT_FLAGS} -fprofile-generate=${WORK_DIR}/pgo-profiles" \
       CXXFLAGS="${OPT_FLAGS} -fprofile-generate=${WORK_DIR}/pgo-profiles" \
+      LDFLAGS="-static" \
     ../gcc/configure \
       --target="$TARGET" \
       --prefix="${STAGE1_PREFIX}" \
@@ -337,6 +340,7 @@ _build_gcc_pgo() {
 
   env CFLAGS="${OPT_FLAGS} -fprofile-use=${WORK_DIR}/pgo-profiles -fprofile-correction" \
       CXXFLAGS="${OPT_FLAGS} -fprofile-use=${WORK_DIR}/pgo-profiles -fprofile-correction" \
+      LDFLAGS="-static" \
     ../gcc/configure \
       --target="$TARGET" \
       --prefix="$PREFIX" \
