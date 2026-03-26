@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0
-# Enhanced for Google Tensor G1 (Cortex-X1 / A76 / A55) Android targets
+# Optimized cross-compiler build script
+# For Google Pixel 6 series
 set -euo pipefail
 
 # ─────────────────────────────────────────────────────────────────
-#  TENSOR G1 CORE TOPOLOGY
-#  2x Cortex-X1  @ 2.80 GHz  — ARMv8.2-A + SVE + DotProd + FP16
-#  2x Cortex-A76 @ 2.25 GHz  — ARMv8.2-A
-#  4x Cortex-A55 @ 1.80 GHz  — ARMv8.2-A (in-order)
-#  Primary tune target: cortex-x1 (performance-critical code path)
+#  ARCHITECTURE TUNING
+#  Primary tune target is specified per-architecture
 # ─────────────────────────────────────────────────────────────────
 
 # ── Colour helpers ────────────────────────────────────────────────
@@ -30,8 +28,8 @@ elapsed() {
 # ── Banner ────────────────────────────────────────────────────────
 echo -e "${BOLD}"
 echo "╔══════════════════════════════════════════════════════════╗"
-echo "║     Bleeding-Edge GCC — Tensor G1 Performance Build     ║"
-echo "║        Cortex-X1 · Cortex-A76 · Cortex-A55 (A64)       ║"
+echo "║      Bleeding-Edge GCC — Optimized Cross-Compiler       ║"
+echo "║                                                          ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo -e "${RESET}"
 
@@ -62,20 +60,20 @@ case "${arch}" in
   "arm")
     TARGET="arm-linux-gnueabi"
     EXTRA_GCC_FLAGS="--with-fpu=crypto-neon-fp-armv8"
-    TENSOR_ARCH="armv8.2-a+crypto+dotprod+fp16+rcpc+ssbs+sb"
-    TENSOR_TUNE="cortex-x1"
+    TARGET_ARCH="armv8.2-a+crypto+dotprod+fp16+rcpc+ssbs+sb"
+    TARGET_TUNE="cortex-x1"
     ;;
   "arm64")
     TARGET="aarch64-linux-gnu"
     EXTRA_GCC_FLAGS="--with-abi=lp64 --enable-fix-cortex-a53-835769 --enable-fix-cortex-a53-843419"
-    TENSOR_ARCH="armv8.2-a+crypto+dotprod+fp16+rcpc+ssbs+sb"
-    TENSOR_TUNE="cortex-x1"
+    TARGET_ARCH="armv8.2-a+crypto+dotprod+fp16+rcpc+ssbs+sb"
+    TARGET_TUNE="cortex-x1"
     ;;
   "x86")
     TARGET="x86_64-linux-gnu"
     EXTRA_GCC_FLAGS=""
-    TENSOR_ARCH="x86-64-v3"
-    TENSOR_TUNE="skylake"
+    TARGET_ARCH="x86-64-v3"
+    TARGET_TUNE="skylake"
     ;;
   *)
     die "Unknown arch '${arch}'. Valid: arm | arm64 | x86"
@@ -118,7 +116,7 @@ HOST_OPT_FLAGS=(
 OPT_FLAGS="${HOST_OPT_FLAGS[*]}"
 export OPT_FLAGS
 
-# ── Tensor G1 — target-code default flags (baked into the toolchain)
+# ── Target — target-code default flags (baked into the toolchain)
 # These become the *default* -march/-mtune the produced GCC will use
 # when compiling Android source unless overridden by the caller.
 #
@@ -139,7 +137,7 @@ export OPT_FLAGS
 log "Work dir : ${WORK_DIR}"
 log "Prefix   : ${PREFIX}"
 log "Target   : ${TARGET}"
-log "Arch     : ${TENSOR_ARCH}  tune=${TENSOR_TUNE}"
+log "Arch     : ${TARGET_ARCH}  tune=${TARGET_TUNE}"
 log "PGO      : ${ENABLE_PGO}"
 echo ""
 
@@ -191,8 +189,8 @@ build_binutils() {
       --target="$TARGET" \
       --prefix="$PREFIX" \
       --with-sysroot \
-      --with-arch="${TENSOR_ARCH}" \
-      --with-tune="${TENSOR_TUNE}" \
+      --with-arch="${TARGET_ARCH}" \
+      --with-tune="${TARGET_TUNE}" \
       --enable-static \
       --disable-shared \
       --enable-plugins \
@@ -229,9 +227,9 @@ _configure_gcc() {
       --target="$TARGET" \
       --prefix="$prefix" \
       \
-      `# ── Tensor G1 target defaults ─────────────────────────` \
-      --with-arch="${TENSOR_ARCH}" \
-      --with-tune="${TENSOR_TUNE}" \
+      `# ── Target architecture defaults ─────────────────────────` \
+      --with-arch="${TARGET_ARCH}" \
+      --with-tune="${TARGET_TUNE}" \
       ${EXTRA_GCC_FLAGS} \
       \
       `# ── Language & runtime ────────────────────────────────` \
@@ -316,8 +314,8 @@ _build_gcc_pgo() {
     ../gcc/configure \
       --target="$TARGET" \
       --prefix="${STAGE1_PREFIX}" \
-      --with-arch="${TENSOR_ARCH}" \
-      --with-tune="${TENSOR_TUNE}" \
+      --with-arch="${TARGET_ARCH}" \
+      --with-tune="${TARGET_TUNE}" \
       ${EXTRA_GCC_FLAGS} \
       --enable-languages=c,c++ \
       --enable-threads=posix \
@@ -360,8 +358,8 @@ _build_gcc_pgo() {
     ../gcc/configure \
       --target="$TARGET" \
       --prefix="$PREFIX" \
-      --with-arch="${TENSOR_ARCH}" \
-      --with-tune="${TENSOR_TUNE}" \
+      --with-arch="${TARGET_ARCH}" \
+      --with-tune="${TARGET_TUNE}" \
       ${EXTRA_GCC_FLAGS} \
       --enable-languages=c,c++ \
       --enable-threads=posix \
@@ -406,8 +404,8 @@ print_summary() {
   echo -e "${BOLD}║                     Build Summary                       ║${RESET}"
   echo -e "${BOLD}╠══════════════════════════════════════════════════════════╣${RESET}"
   printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Target triple:"  "$TARGET"
-  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Architecture:"   "$TENSOR_ARCH"
-  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Tune for:"       "$TENSOR_TUNE (Cortex-X1 prime core)"
+  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Architecture:"   "$TARGET_ARCH"
+  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Tune for:"       "$TARGET_TUNE "
   printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Extra Flags:"            "${EXTRA_GCC_FLAGS}"
   printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "PGO:"            "$ENABLE_PGO"
   printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Installed to:"   "$PREFIX"
