@@ -165,7 +165,6 @@ build_binutils() {
   log "Configuring binutils..."
   mkdir -p build-binutils && cd build-binutils
 
-  # ld.gold is faster than ld.bfd for large Android trees
   env CFLAGS="$OPT_FLAGS" CXXFLAGS="$OPT_FLAGS" \
     ../binutils/configure \
       --target="$TARGET" \
@@ -173,7 +172,6 @@ build_binutils() {
       --with-sysroot \
       --with-arch="${TENSOR_ARCH}" \
       --with-tune="${TENSOR_TUNE}" \
-      --enable-gold \
       --enable-plugins \
       --enable-relro \
       --enable-threads \
@@ -181,7 +179,11 @@ build_binutils() {
       --enable-deterministic-archives \
       --disable-docs \
       --disable-gdb \
+      --disable-gprof \
+      --disable-gprofng \
       --disable-gdbserver \
+      --disable-libdecnumber \
+      --disable-readline \
       --disable-nls \
       --disable-sim \
       --disable-werror \
@@ -215,7 +217,7 @@ _configure_gcc() {
       --enable-fix-cortex-a53-843419 \
       \
       `# ── Language & runtime ────────────────────────────────` \
-      --enable-languages=c,c++,fortran \
+      --enable-languages=c,c++ \
       --enable-threads=posix \
       --enable-default-ssp \
       --enable-default-pie \
@@ -344,7 +346,7 @@ _build_gcc_pgo() {
       --with-fpu=crypto-neon-fp-armv8 \
       --enable-fix-cortex-a53-835769 \
       --enable-fix-cortex-a53-843419 \
-      --enable-languages=c,c++,fortran \
+      --enable-languages=c,c++ \
       --enable-threads=posix \
       --enable-default-ssp \
       --enable-default-pie \
