@@ -86,10 +86,9 @@ export PREFIX="$WORK_DIR/gcc-${arch}"
 export PATH="$PREFIX/bin:/usr/bin/core_perl:$PATH"
 
 # ── Parallelism ───────────────────────────────────────────────────
-# Leave 1 logical CPU free so the desktop stays responsive.
-RAW_JOBS=$(nproc --all)
-JOBS=$(( RAW_JOBS > 1 ? RAW_JOBS - 1 : RAW_JOBS ))
-log "Detected ${RAW_JOBS} logical CPUs → using ${JOBS} parallel jobs"
+# Use all available logical CPUs for maximum build speed.
+JOBS=$(nproc --all)
+log "Detected ${JOBS} logical CPUs → using ${JOBS} parallel jobs"
 
 # ── Host compiler optimisation flags ─────────────────────────────
 # These flags build the compiler itself as fast as possible on the
