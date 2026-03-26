@@ -1,71 +1,46 @@
 version: v1.0
-name: "GCC Toolchain — Tensor G1 (arm64 + arm)"
-
+name: GCC Toolchain — Tensor G1 (arm64 + arm)
 agent:
   machine:
-    type: a1-standard-4
+    type: f1-standard-2
     os_image: ubuntu2404
-
-# ── Global env ────────────────────────────────────────────────────
+fail_fast:
+  stop:
+    when: 'true'
+auto_cancel:
+  running:
+    when: 'true'
 global_job_config:
   env_vars:
     - name: BINUTILS_BRANCH
-      value: "binutils-2_46"
+      value: binutils-2_46
     - name: GCC_BRANCH
-      value: "releases/gcc-15"
+      value: releases/gcc-15
     - name: DEBIAN_FRONTEND
       value: noninteractive
-
-# ── Pipeline ──────────────────────────────────────────────────────
 blocks:
-
-  # ── 1. Install host dependencies (shared, cached) ───────────────
-  - name: "Install Dependencies"
+  - name: Install Dependencies
     dependencies: []
     task:
       jobs:
-        - name: "apt-get"
+        - name: apt-get
           commands:
             - checkout
             - sudo apt-get update -qq
-            - sudo apt-get install -y --no-install-recommends
-                build-essential
-                gcc g++ gfortran
-                bison flex
-                texinfo
-                gawk
-                libgmp-dev
-                libmpfr-dev
-                libmpc-dev
-                libisl-dev
-                zlib1g-dev
-                git
-                xz-utils
-                ca-certificates
-            # Cache the downloaded apt packages for subsequent runs
+            - sudo apt-get install -y --no-install-recommends build-essential gcc g++ gfortran bison flex texinfo gawk libgmp-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev git xz-utils ca-certificates
             - cache store apt-gcc-deps-$(date +%Y-%m) /var/cache/apt/archives
-
-  # ── 2. Build arm64 Toolchain ────────────────────────────────────
-  - name: "Build arm64 Toolchain"
+  - name: Build arm64 Toolchain
     dependencies:
-      - "Install Dependencies"
+      - Install Dependencies
     task:
       prologue:
         commands:
           - checkout
-          # Restore apt cache if available (saves ~60 s on cache hit)
           - cache restore apt-gcc-deps-$(date +%Y-%m)
-          - sudo apt-get install -y --no-install-recommends
-              build-essential gcc g++ gfortran
-              bison flex texinfo gawk
-              libgmp-dev libmpfr-dev libmpc-dev libisl-dev
-              zlib1g-dev git xz-utils ca-certificates
+          - sudo apt-get install -y --no-install-recommends build-essential gcc g++ gfortran bison flex texinfo gawk libgmp-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev git xz-utils ca-certificates
           - chmod +x build.sh
-
       jobs:
-
-        # ── arm64 → aarch64-linux-gnu ──────────────────────────────
-        - name: "arm64 (aarch64-linux-gnu)"
+        - name: arm64 (aarch64-linux-gnu)
           env_vars:
             - name: ARCH
               value: arm64
@@ -74,37 +49,26 @@ blocks:
             - name: ARTIFACT_NAME
               value: gcc-arm64-aarch64-linux-gnu
           commands:
-            - echo "--- Building GCC for ${ARCH} / ${TARGET_TRIPLE} ---"
-            - bash build.sh -a "${ARCH}"
+            - 'echo "--- Building GCC for ${ARCH} / ${TARGET_TRIPLE} ---"'
+            - 'bash build.sh -a "${ARCH}"'
             - echo "--- Stripping binaries to reduce size ---"
-            - bash strip.sh "gcc-${ARCH}/"
+            - 'bash strip.sh "gcc-${ARCH}/"'
             - echo "--- Packaging artifact ---"
-            - tar -cJf "${ARTIFACT_NAME}.tar.xz" "gcc-${ARCH}/"
-            - ls -lh "${ARTIFACT_NAME}.tar.xz"
-            - artifact push workflow "${ARTIFACT_NAME}.tar.xz"
-              --destination "toolchains/${ARTIFACT_NAME}.tar.xz"
-
-  # ── 3. Build arm Toolchain ──────────────────────────────────────
-  - name: "Build arm Toolchain"
+            - 'tar -cJf "${ARTIFACT_NAME}.tar.xz" "gcc-${ARCH}/"'
+            - 'ls -lh "${ARTIFACT_NAME}.tar.xz"'
+            - 'artifact push workflow "${ARTIFACT_NAME}.tar.xz" --destination "toolchains/${ARTIFACT_NAME}.tar.xz"'
+  - name: Build arm Toolchain
     dependencies:
-      - "Build arm64 Toolchain"
+      - Build arm64 Toolchain
     task:
       prologue:
         commands:
           - checkout
-          # Restore apt cache if available (saves ~60 s on cache hit)
           - cache restore apt-gcc-deps-$(date +%Y-%m)
-          - sudo apt-get install -y --no-install-recommends
-              build-essential gcc g++ gfortran
-              bison flex texinfo gawk
-              libgmp-dev libmpfr-dev libmpc-dev libisl-dev
-              zlib1g-dev git xz-utils ca-certificates
+          - sudo apt-get install -y --no-install-recommends build-essential gcc g++ gfortran bison flex texinfo gawk libgmp-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev git xz-utils ca-certificates
           - chmod +x build.sh
-
       jobs:
-
-        # ── arm → arm-linux-gnueabi ────────────────────────────────
-        - name: "arm (arm-linux-gnueabi)"
+        - name: arm (arm-linux-gnueabi)
           env_vars:
             - name: ARCH
               value: arm
@@ -113,35 +77,26 @@ blocks:
             - name: ARTIFACT_NAME
               value: gcc-arm-arm-linux-gnueabi
           commands:
-            - echo "--- Building GCC for ${ARCH} / ${TARGET_TRIPLE} ---"
-            - bash build.sh -a "${ARCH}"
+            - 'echo "--- Building GCC for ${ARCH} / ${TARGET_TRIPLE} ---"'
+            - 'bash build.sh -a "${ARCH}"'
             - echo "--- Stripping binaries to reduce size ---"
-            - bash strip.sh "gcc-${ARCH}/"
+            - 'bash strip.sh "gcc-${ARCH}/"'
             - echo "--- Packaging artifact ---"
-            - tar -cJf "${ARTIFACT_NAME}.tar.xz" "gcc-${ARCH}/"
-            - ls -lh "${ARTIFACT_NAME}.tar.xz"
-            - artifact push workflow "${ARTIFACT_NAME}.tar.xz"
-              --destination "toolchains/${ARTIFACT_NAME}.tar.xz"
-
-  # ── 4. Publish summary ──────────────────────────────────────────
-  - name: "Publish Artifacts"
+            - 'tar -cJf "${ARTIFACT_NAME}.tar.xz" "gcc-${ARCH}/"'
+            - 'ls -lh "${ARTIFACT_NAME}.tar.xz"'
+            - 'artifact push workflow "${ARTIFACT_NAME}.tar.xz" --destination "toolchains/${ARTIFACT_NAME}.tar.xz"'
+  - name: Publish Artifacts
     dependencies:
-      - "Build arm Toolchain"
+      - Build arm Toolchain
     task:
       jobs:
-        - name: "Promote to project store"
+        - name: Promote to project store
           commands:
-            # Pull both zips from the workflow store and re-push to the
-            # persistent project artifact store so they survive the workflow.
             - artifact pull workflow toolchains/gcc-arm64-aarch64-linux-gnu.tar.xz
             - artifact pull workflow toolchains/gcc-arm-arm-linux-gnueabi.tar.xz
-
-            - artifact push project gcc-arm64-aarch64-linux-gnu.tar.xz
-                --destination "releases/${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_SHA:0:8}}/gcc-arm64-aarch64-linux-gnu.tar.xz"
-            - artifact push project gcc-arm-arm-linux-gnueabi.tar.xz
-                --destination "releases/${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_SHA:0:8}}/gcc-arm-arm-linux-gnueabi.tar.xz"
-
+            - 'artifact push project gcc-arm64-aarch64-linux-gnu.tar.xz --destination "releases/${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_SHA:0:8}}/gcc-arm64-aarch64-linux-gnu.tar.xz"'
+            - 'artifact push project gcc-arm-arm-linux-gnueabi.tar.xz --destination "releases/${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_SHA:0:8}}/gcc-arm-arm-linux-gnueabi.tar.xz"'
             - echo ""
-            - echo "Artifacts published under releases/${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_SHA:0:8}}/"
+            - 'echo "Artifacts published under releases/${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_SHA:0:8}}/"'
             - echo "  gcc-arm64-aarch64-linux-gnu.tar.xz"
             - echo "  gcc-arm-arm-linux-gnueabi.tar.xz"
