@@ -4,6 +4,9 @@ agent:
   machine:
     type: f1-standard-2
     os_image: ubuntu2404
+  containers:
+    - name: main
+      image: buildpack-deps:bookworm-scm
 fail_fast:
   stop:
     when: 'true'
@@ -26,8 +29,8 @@ blocks:
         - name: apt-get
           commands:
             - checkout
-            - sudo apt-get update -qq
-            - sudo apt-get install -y --no-install-recommends build-essential gcc g++ gfortran bison flex texinfo gawk libgmp-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev git xz-utils ca-certificates
+            - apt-get update -qq && apt-get upgrade -y
+            - apt-get update -qq && apt-get install -y --no-install-recommends build-essential gcc g++ bison flex texinfo gawk libgmp-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev git xz-utils ca-certificates
             - cache store apt-gcc-deps-$(date +%Y-%m) /var/cache/apt/archives
   - name: Build arm64 Toolchain
     dependencies:
@@ -37,7 +40,7 @@ blocks:
         commands:
           - checkout
           - cache restore apt-gcc-deps-$(date +%Y-%m)
-          - sudo apt-get install -y --no-install-recommends build-essential gcc g++ gfortran bison flex texinfo gawk libgmp-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev git xz-utils ca-certificates
+          - apt-get update -qq && apt-get install -y --no-install-recommends build-essential gcc g++ bison flex texinfo gawk libgmp-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev git xz-utils ca-certificates
           - chmod +x build.sh
       jobs:
         - name: arm64 (aarch64-linux-gnu)
@@ -65,7 +68,7 @@ blocks:
         commands:
           - checkout
           - cache restore apt-gcc-deps-$(date +%Y-%m)
-          - sudo apt-get install -y --no-install-recommends build-essential gcc g++ gfortran bison flex texinfo gawk libgmp-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev git xz-utils ca-certificates
+          - apt-get update -qq && apt-get install -y --no-install-recommends build-essential gcc g++ bison flex texinfo gawk libgmp-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev git xz-utils ca-certificates
           - chmod +x build.sh
       jobs:
         - name: arm (arm-linux-gnueabi)
