@@ -10,10 +10,11 @@ ok()   { echo -e "\033[0;32m[DONE]\033[0m  $*"; }
 CUR_DIR="${1:-$(pwd)}"
 log "Target directory: $CUR_DIR"
 
-# Auto-detect strip tools; fallback gracefully if not found
-X86S=$(command -v strip || true)
-A64S=$(command -v aarch64-linux-gnu-strip || true)
-A32S=$(command -v arm-linux-gnueabi-strip || command -v arm-linux-gnu-strip || true)
+# Try to use llvm-strip, fall back to binutils strip
+LLVMS=$(command -v llvm-strip || true)
+X86S=${LLVMS:-$(command -v strip || true)}
+A64S=${LLVMS:-$(command -v aarch64-linux-gnu-strip || true)}
+A32S=${LLVMS:-$(command -v arm-linux-gnueabi-strip || command -v arm-linux-gnu-strip || true)}
 
 # Use a safely handled temporary file
 IDX=$(mktemp)
@@ -27,28 +28,31 @@ find "$CUR_DIR" -type f -exec file {} + > "$IDX" || true
 # `sed` cleanly captures everything before the first colon and space `: `,
 # avoiding issues with spaces in directory paths unlike `awk`.
 process_lines() {
-	local tool="$1"
-	sed 's/:[[:space:]].*//' | while IFS= read -r filepath; do
+        local tool="$1"
+        sed 's/:[[:space:]].*//' | while IFS= read -r filepath; do
                 "$tool" --strip-unneeded "$filepath" 2>/dev/null || true
+        done
+}
+
 if [[ -n "$X86S" && -x "$X86S" ]]; then
-	log "Stripping x86 binaries using ${X86S}..."
-	grep "x86" "$IDX" | grep "not strip" | grep -v "relocatable" | process_lines "$X86S" || true
+        log "Stripping x86 binaries using ${X86S}..."
+        grep "x86" "$IDX" | grep "not strip" | grep -v "relocatable" | process_lines "$X86S" || true
 else
-	warn "Stripper for x86 not found. Skipping."
+        warn "Stripper for x86 not found. Skipping."
 fi
 
 if [[ -n "$A64S" && -x "$A64S" ]]; then
-	log "Stripping aarch64 binaries using ${A64S}..."
-	grep "ARM" "$IDX" | grep "aarch64" | grep "not strip" | grep -v "relocatable" | process_lines "$A64S" || true
+        log "Stripping aarch64 binaries using ${A64S}..."
+        grep "ARM" "$IDX" | grep "aarch64" | grep "not strip" | grep -v "relocatable" | process_lines "$A64S" || true
 else
-	warn "Stripper for aarch64 not found. Skipping."
+        warn "Stripper for aarch64 not found. Skipping."
 fi
 
 if [[ -n "$A32S" && -x "$A32S" ]]; then
-	log "Stripping arm32 binaries using ${A32S}..."
-	grep "ARM" "$IDX" | grep -E "32[-.]bit" | grep "not strip" | grep -v "relocatable" | process_lines "$A32S" || true
+        log "Stripping arm32 binaries using ${A32S}..."
+        grep "ARM" "$IDX" | grep -E "32[-.]bit" | grep "not strip" | grep -v "relocatable" | process_lines "$A32S" || true
 else
-	warn "Stripper for arm32 not found. Skipping."
+        warn "Stripper for arm32 not found. Skipping."
 fi
 
 ok "Stripping process completed."

@@ -70,6 +70,13 @@ export WORK_DIR="$PWD"
 export PREFIX="$WORK_DIR/gcc-${arch}"
 export PATH="$PREFIX/bin:/usr/bin/core_perl:$PATH"
 
+export CC="clang"
+export CXX="clang++"
+export AR="llvm-ar"
+export NM="llvm-nm"
+export STRIP="llvm-strip"
+export RANLIB="llvm-ranlib"
+
 # ── Parallelism ───────────────────────────────────────────────────
 # Leave 1 logical CPU free so the desktop stays responsive.
 RAW_JOBS=$(nproc --all)
@@ -88,9 +95,8 @@ HOST_OPT_FLAGS=(
   "-fomit-frame-pointer"        # free one register on x86-64
   "-ffunction-sections"         # allow linker to GC unused text sections
   "-fdata-sections"             # same for data
-  "-flto=auto"                  # parallel LTO using all available cores
-  "-flto-compression-level=6"   # balance compression vs. build speed
-  "-fuse-linker-plugin"         # LTO-aware linker plugin
+  "-flto"                       # "Fat" (full) LTO for aggressive cross-module optimizations
+  "-fuse-ld=lld"                # immensely faster than bfd/gold linker
 )
 OPT_FLAGS="${HOST_OPT_FLAGS[*]}"
 export OPT_FLAGS
@@ -125,7 +131,7 @@ echo ""
 # ── Dependency check ──────────────────────────────────────────────
 check_deps() {
   local missing=()
-  for cmd in git make gcc g++ bison flex makeinfo gawk; do
+  for cmd in git make clang clang++ llvm-ar llvm-nm lld bison flex makeinfo gawk; do
     command -v "$cmd" &>/dev/null || missing+=("$cmd")
   done
   if [[ ${#missing[@]} -gt 0 ]]; then
