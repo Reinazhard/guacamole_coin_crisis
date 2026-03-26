@@ -57,7 +57,7 @@ blocks:
             - echo "--- Stripping binaries to reduce size ---"
             - 'bash strip.sh "gcc-${ARCH}/"'
             - echo "--- Packaging artifact ---"
-            - 'tar -cJf "${ARTIFACT_NAME}.tar.xz" "gcc-${ARCH}/"'
+            - 'env XZ_OPT="-T0 -9" tar -cJf "${ARTIFACT_NAME}.tar.xz" "gcc-${ARCH}/"'
             - 'ls -lh "${ARTIFACT_NAME}.tar.xz"'
             - 'artifact push workflow "${ARTIFACT_NAME}.tar.xz" --destination "toolchains/${ARTIFACT_NAME}.tar.xz"'
   - name: Build arm Toolchain
@@ -85,7 +85,7 @@ blocks:
             - echo "--- Stripping binaries to reduce size ---"
             - 'bash strip.sh "gcc-${ARCH}/"'
             - echo "--- Packaging artifact ---"
-            - 'tar -cJf "${ARTIFACT_NAME}.tar.xz" "gcc-${ARCH}/"'
+            - 'env XZ_OPT="-T0 -9" tar -cJf "${ARTIFACT_NAME}.tar.xz" "gcc-${ARCH}/"'
             - 'ls -lh "${ARTIFACT_NAME}.tar.xz"'
             - 'artifact push workflow "${ARTIFACT_NAME}.tar.xz" --destination "toolchains/${ARTIFACT_NAME}.tar.xz"'
   - name: Publish Artifacts
