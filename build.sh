@@ -125,7 +125,7 @@ echo ""
 # ── Dependency check ──────────────────────────────────────────────
 check_deps() {
   local missing=()
-  for cmd in git make gcc g++ bison flex texinfo gawk; do
+  for cmd in git make gcc g++ bison flex makeinfo gawk; do
     command -v "$cmd" &>/dev/null || missing+=("$cmd")
   done
   if [[ ${#missing[@]} -gt 0 ]]; then
