@@ -21,6 +21,7 @@ blocks:
 
   # ── 1. Install host dependencies (shared, cached) ───────────────
   - name: "Install Dependencies"
+    dependencies: []
     task:
       jobs:
         - name: "apt-get"
@@ -45,7 +46,8 @@ blocks:
 
   # ── 2. Build arm64 Toolchain ────────────────────────────────────
   - name: "Build arm64 Toolchain"
-    dependency: "Install Dependencies"
+    dependencies:
+      - "Install Dependencies"
     task:
       prologue:
         commands:
@@ -82,7 +84,8 @@ blocks:
 
   # ── 3. Build arm Toolchain ──────────────────────────────────────
   - name: "Build arm Toolchain"
-    dependency: "Build arm64 Toolchain"
+    dependencies:
+      - "Build arm64 Toolchain"
     task:
       prologue:
         commands:
@@ -119,7 +122,8 @@ blocks:
 
   # ── 4. Publish summary ──────────────────────────────────────────
   - name: "Publish Artifacts"
-    dependency: "Build arm Toolchain"
+    dependencies:
+      - "Build arm Toolchain"
     task:
       jobs:
         - name: "Promote to project store"
