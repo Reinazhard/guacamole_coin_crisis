@@ -26,6 +26,7 @@ blocks:
       jobs:
         - name: "apt-get"
           commands:
+            - checkout
             - sudo apt-get update -qq
             - sudo apt-get install -y --no-install-recommends
                 build-essential
@@ -51,6 +52,7 @@ blocks:
     task:
       prologue:
         commands:
+          - checkout
           # Restore apt cache if available (saves ~60 s on cache hit)
           - cache restore apt-gcc-deps-$(date +%Y-%m)
           - sudo apt-get install -y --no-install-recommends
@@ -89,6 +91,7 @@ blocks:
     task:
       prologue:
         commands:
+          - checkout
           # Restore apt cache if available (saves ~60 s on cache hit)
           - cache restore apt-gcc-deps-$(date +%Y-%m)
           - sudo apt-get install -y --no-install-recommends
