@@ -1,0 +1,136 @@
+version: v1.0
+name: "GCC Toolchain — Tensor G1 (arm64 + arm)"
+
+agent:
+  machine:
+    type: e1-standard-4        # 4 vCPU / 8 GB — adjust to e1-standard-8 for faster builds
+    os_image: ubuntu2204
+
+# ── Global env ────────────────────────────────────────────────────
+global_job_config:
+  env_vars:
+    - name: BINUTILS_BRANCH
+      value: "binutils-2_46"
+    - name: GCC_BRANCH
+      value: "releases/gcc-15"
+    - name: DEBIAN_FRONTEND
+      value: noninteractive
+
+# ── Pipeline ──────────────────────────────────────────────────────
+blocks:
+
+  # ── 1. Install host dependencies (shared, cached) ───────────────
+  - name: "Install Dependencies"
+    task:
+      jobs:
+        - name: "apt-get"
+          commands:
+            - sudo apt-get update -qq
+            - sudo apt-get install -y --no-install-recommends
+                build-essential
+                gcc g++ gfortran
+                bison flex
+                texinfo
+                gawk
+                libgmp-dev
+                libmpfr-dev
+                libmpc-dev
+                libisl-dev
+                zlib1g-dev
+                git
+                zip
+                ca-certificates
+            # Cache the downloaded apt packages for subsequent runs
+            - cache store apt-gcc-deps-$(date +%Y-%m) /var/cache/apt/archives
+
+  # ── 2. Build arm64 Toolchain ────────────────────────────────────
+  - name: "Build arm64 Toolchain"
+    dependency: "Install Dependencies"
+    task:
+      prologue:
+        commands:
+          # Restore apt cache if available (saves ~60 s on cache hit)
+          - cache restore apt-gcc-deps-$(date +%Y-%m)
+          - sudo apt-get install -y --no-install-recommends
+              build-essential gcc g++ gfortran
+              bison flex texinfo gawk
+              libgmp-dev libmpfr-dev libmpc-dev libisl-dev
+              zlib1g-dev git zip ca-certificates
+          - chmod +x build.sh
+
+      jobs:
+
+        # ── arm64 → aarch64-linux-gnu ──────────────────────────────
+        - name: "arm64 (aarch64-linux-gnu)"
+          env_vars:
+            - name: ARCH
+              value: arm64
+            - name: TARGET_TRIPLE
+              value: aarch64-linux-gnu
+            - name: ARTIFACT_NAME
+              value: gcc-arm64-aarch64-linux-gnu
+          commands:
+            - echo "--- Building GCC for ${ARCH} / ${TARGET_TRIPLE} ---"
+            - bash build.sh -a "${ARCH}"
+            - echo "--- Packaging artifact ---"
+            - zip -r9 "${ARTIFACT_NAME}.zip" "gcc-${ARCH}/"
+            - ls -lh "${ARTIFACT_NAME}.zip"
+            - artifact push workflow "${ARTIFACT_NAME}.zip"
+              --destination "toolchains/${ARTIFACT_NAME}.zip"
+
+  # ── 3. Build arm Toolchain ──────────────────────────────────────
+  - name: "Build arm Toolchain"
+    dependency: "Build arm64 Toolchain"
+    task:
+      prologue:
+        commands:
+          # Restore apt cache if available (saves ~60 s on cache hit)
+          - cache restore apt-gcc-deps-$(date +%Y-%m)
+          - sudo apt-get install -y --no-install-recommends
+              build-essential gcc g++ gfortran
+              bison flex texinfo gawk
+              libgmp-dev libmpfr-dev libmpc-dev libisl-dev
+              zlib1g-dev git zip ca-certificates
+          - chmod +x build.sh
+
+      jobs:
+
+        # ── arm → arm-linux-gnueabi ────────────────────────────────
+        - name: "arm (arm-linux-gnueabi)"
+          env_vars:
+            - name: ARCH
+              value: arm
+            - name: TARGET_TRIPLE
+              value: arm-linux-gnueabi
+            - name: ARTIFACT_NAME
+              value: gcc-arm-arm-linux-gnueabi
+          commands:
+            - echo "--- Building GCC for ${ARCH} / ${TARGET_TRIPLE} ---"
+            - bash build.sh -a "${ARCH}"
+            - echo "--- Packaging artifact ---"
+            - zip -r9 "${ARTIFACT_NAME}.zip" "gcc-${ARCH}/"
+            - ls -lh "${ARTIFACT_NAME}.zip"
+            - artifact push workflow "${ARTIFACT_NAME}.zip"
+              --destination "toolchains/${ARTIFACT_NAME}.zip"
+
+  # ── 4. Publish summary ──────────────────────────────────────────
+  - name: "Publish Artifacts"
+    dependency: "Build arm Toolchain"
+    task:
+      jobs:
+        - name: "Promote to project store"
+          commands:
+            # Pull both zips from the workflow store and re-push to the
+            # persistent project artifact store so they survive the workflow.
+            - artifact pull workflow toolchains/gcc-arm64-aarch64-linux-gnu.zip
+            - artifact pull workflow toolchains/gcc-arm-arm-linux-gnueabi.zip
+
+            - artifact push project gcc-arm64-aarch64-linux-gnu.zip
+                --destination "releases/${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_SHA:0:8}}/gcc-arm64-aarch64-linux-gnu.zip"
+            - artifact push project gcc-arm-arm-linux-gnueabi.zip
+                --destination "releases/${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_SHA:0:8}}/gcc-arm-arm-linux-gnueabi.zip"
+
+            - echo ""
+            - echo "Artifacts published under releases/${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_SHA:0:8}}/"
+            - echo "  gcc-arm64-aarch64-linux-gnu.zip"
+            - echo "  gcc-arm-arm-linux-gnueabi.zip"
