@@ -148,7 +148,7 @@ check_deps() {
     command -v "$cmd" &>/dev/null || missing+=("$cmd")
   done
   if [[ ${#missing[@]} -gt 0 ]]; then
-    die "Missing host tools: ${missing[*]}\nInstall with: sudo apt install ${missing[*]}"
+    die "Missing host tools: ${missing[*]}\nMake sure you have installed: clang llvm lld bison flex texinfo gawk"
   fi
 }
 
