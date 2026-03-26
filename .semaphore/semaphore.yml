@@ -4,7 +4,7 @@ name: "GCC Toolchain — Tensor G1 (arm64 + arm)"
 agent:
   machine:
     type: f1-standard-2
-    os_image: ubuntu2204
+    os_image: ubuntu2404
 
 # ── Global env ────────────────────────────────────────────────────
 global_job_config:
