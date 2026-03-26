@@ -29,7 +29,7 @@ blocks:
           commands:
             - checkout
             - apt-get update -qq
-            - apt-get install -y --no-install-recommends build-essential clang llvm lld bison flex texinfo gawk libgmp-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev git xz-utils ca-certificates
+            - apt-get install -y --no-install-recommends build-essential bison flex texinfo gawk libgmp-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev git xz-utils ca-certificates
             - chmod +x build.sh strip.sh
             
             - echo "--- Building GCC for arm64 / aarch64-linux-gnu ---"
