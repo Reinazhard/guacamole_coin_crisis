@@ -1,0 +1,58 @@
+stages:
+  - build
+
+variables:
+  BINUTILS_BRANCH: "binutils-2_46"
+  GCC_BRANCH: "releases/gcc-15"
+  DEBIAN_FRONTEND: "noninteractive"
+  # Shallow clone to save runner startup time
+  GIT_DEPTH: "1"
+
+# Prevent duplicate duplicate pipelines on Merge Requests
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+build-toolchain:
+  stage: build
+  image: buildpack-deps:26.04-scm
+  interruptible: true
+  # Explicitly request a larger runner tag on GitLab.com compute
+  tags:
+    - saas-linux-medium-amd64
+  # GCC compiles take time, extend timeout beyond standard 1h default
+  timeout: 3h
+  # Protect against random shared runner disconnects
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+      - runner_unsupported
+  parallel:
+    matrix:
+      - ARCH: "arm64"
+        TARGET_TRIPLE: "aarch64-linux-gnu"
+      - ARCH: "arm"
+        TARGET_TRIPLE: "arm-linux-gnueabi"
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y --no-install-recommends build-essential bison flex texinfo gawk libgmp-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev git xz-utils ca-certificates
+    - chmod +x build.sh strip.sh
+  script:
+    - echo "--- Building GCC for ${ARCH} / ${TARGET_TRIPLE} ---"
+    - bash build.sh -a "${ARCH}"
+    - echo "--- Stripping binaries ---"
+    - bash strip.sh "gcc-${ARCH}/"
+    - echo "--- Packaging artifact ---"
+    - env XZ_OPT="-T0 -9" tar -cJf "gcc-${ARCH}-${TARGET_TRIPLE}.tar.xz" "gcc-${ARCH}/"
+  artifacts:
+    name: "gcc-${ARCH}-${CI_COMMIT_SHORT_SHA}"
+    expire_in: 1 month
+    paths:
+      - "*.tar.xz"
