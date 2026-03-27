@@ -207,8 +207,8 @@ build_binutils() {
       2>&1 | tee "${WORK_DIR}/configure-binutils.log"
 
   log "Building binutils (${JOBS} jobs)..."
-  make -j"$JOBS" 2>&1 | tee "${WORK_DIR}/build-binutils.log"
-  make install -j"$JOBS"
+  make -j"$JOBS" > "${WORK_DIR}/build-binutils.log"
+  make install -j"$JOBS" > /dev/null
   cd "${WORK_DIR}"
   ok "Binutils built and installed  [$(elapsed)]"
 }
@@ -285,10 +285,10 @@ _build_gcc_standard() {
   mkdir -p build-gcc && cd build-gcc
   _configure_gcc "$PREFIX"
 
-  make all-gcc             -j"$JOBS"
-  make all-target-libgcc   -j"$JOBS"
-  make install-gcc         -j"$JOBS"
-  make install-target-libgcc -j"$JOBS"
+  make all-gcc             -j"$JOBS" > "${WORK_DIR}/build-gcc.log"
+  make all-target-libgcc   -j"$JOBS" >> "${WORK_DIR}/build-gcc.log"
+  make install-gcc         -j"$JOBS" > /dev/null
+  make install-target-libgcc -j"$JOBS" > /dev/null
   cd "${WORK_DIR}"
   ok "GCC built and installed  [$(elapsed)]"
 }
@@ -328,8 +328,8 @@ _build_gcc_pgo() {
       --disable-werror \
       2>&1 | tee "${WORK_DIR}/configure-gcc-pgo1.log"
 
-  make all-gcc -j"$JOBS"
-  make install-gcc -j"$JOBS"
+  make all-gcc -j"$JOBS" > "${WORK_DIR}/build-gcc-pgo1.log"
+  make install-gcc -j"$JOBS" > /dev/null
   ok "Stage 1 done  [$(elapsed)]"
 
   # ── Stage 2: training run ──────────────────────────────────────
@@ -340,7 +340,7 @@ _build_gcc_pgo() {
   make -C "${WORK_DIR}/build-gcc" \
     CC="${STAGE1_PREFIX}/bin/${TARGET}-gcc" \
     CXX="${STAGE1_PREFIX}/bin/${TARGET}-g++" \
-    all-gcc -j"$JOBS" 2>/dev/null || true   # failures OK — we just want profiles
+    all-gcc -j"$JOBS" > "${WORK_DIR}/build-gcc-pgo-train.log" 2>&1 || true   # failures OK — we just want profiles
   ok "Training run complete  [$(elapsed)]"
 
   # ── Stage 3: optimised build ───────────────────────────────────
@@ -385,10 +385,10 @@ _build_gcc_pgo() {
       --disable-werror \
       2>&1 | tee "${WORK_DIR}/configure-gcc-pgo3.log"
 
-  make all-gcc             -j"$JOBS"
-  make all-target-libgcc   -j"$JOBS"
-  make install-gcc         -j"$JOBS"
-  make install-target-libgcc -j"$JOBS"
+  make all-gcc             -j"$JOBS" > "${WORK_DIR}/build-gcc-pgo3.log"
+  make all-target-libgcc   -j"$JOBS" >> "${WORK_DIR}/build-gcc-pgo3.log"
+  make install-gcc         -j"$JOBS" > /dev/null
+  make install-target-libgcc -j"$JOBS" > /dev/null
   cd "${WORK_DIR}"
   ok "PGO GCC built and installed  [$(elapsed)]"
 }
