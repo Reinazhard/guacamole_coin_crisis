@@ -383,7 +383,7 @@ build_glibc() {
 
   log "Building glibc bootstrap headers & dummy libc..."
   mkdir -p elf
-  make install-bootstrap-headers=yes install-headers
+  make install_root="${SYSROOT}" install-bootstrap-headers=yes install-headers
   make csu/subdir_lib
 
   mkdir -p "${SYSROOT}/usr/lib" "${SYSROOT}/usr/include/gnu"
