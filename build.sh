@@ -272,8 +272,10 @@ download_resources() {
 #   for the BFD linker. Unlike GCC's --with-arch, this does not affect
 #   code generation — there is no code generation in the linker.
 #
-#   LDFLAGS="-static": produces a statically-linked binutils binary.
-#   Intent: redistributable toolchain with no host libc dependency.
+#   The linker (-static-libstdc++ -static-libgcc) creates a highly portable
+#   binary relying only on the host's libc, which is usually safe.
+#   A fully -static binutils kills dynamic dlopen() support preventing
+#   liblto_plugin.so from loading. This is the hybrid compromise.
 #
 #   Gold linker (--enable-gold) removed: gold is deprecated upstream
 #   and was removed in the binutils 2.44 development cycle.
@@ -297,13 +299,14 @@ build_binutils() {
       --enable-relro \
       --enable-threads \
       --enable-lto \
+      --with-zstd \
       --enable-deterministic-archives \
       --disable-nls \
       --disable-werror \
       --disable-docs \
       CFLAGS="${HOST_CFLAGS}" \
       CXXFLAGS="${HOST_CXXFLAGS}" \
-      LDFLAGS="-static" \
+      LDFLAGS="-static-libstdc++ -static-libgcc" \
       2>&1 | tee "${WORK_DIR}/log-binutils-configure.txt"
 
   make
@@ -364,6 +367,9 @@ _configure_gcc() {
       --enable-checking=release \
       --enable-gnu-indirect-function \
       --enable-__cxa_atexit \
+      --enable-plugin \
+      --enable-lto \
+      --with-zstd \
       --with-gnu-as \
       --with-gnu-ld \
       --with-linker-hash-style=gnu \
@@ -381,7 +387,7 @@ _configure_gcc() {
       CXXFLAGS_FOR_TARGET="${TARGET_CXXFLAGS}" \
       CFLAGS_FOR_BUILD="${BUILD_CFLAGS}" \
       CXXFLAGS_FOR_BUILD="${BUILD_CXXFLAGS}" \
-      LDFLAGS="-static" \
+      LDFLAGS="-static-libstdc++ -static-libgcc" \
       "$@" \
       2>&1 | tee "${WORK_DIR}/log-gcc-configure.txt"
 }
@@ -480,12 +486,14 @@ build_glibc() {
 # --enable-default-pie: produces position-independent executables by
 #   default. Safe default; kernel build explicitly disables this via
 #   -fno-PIE / -no-pie in its own Makefile.
-#
 # --enable-default-ssp: enables stack-smashing protection by default.
 #   Same reasoning: can be overridden per-project.
 #
-# LDFLAGS="-static": produces a statically-linked gcc binary.
-#   The kernel CI environment may not have matching shared libs.
+# LDFLAGS="-static-libstdc++ -static-libgcc": Hybrid static linking model.
+#   A fully bare LDFLAGS="-static" breaks dynamic LTO plugins from loading.
+#   This approach statically embeds complex GCC C++ internals (libstdc++)
+#   into the binary ensuring very high portability, while preserving glibc's
+#   dynamic loader necessary for dlopen(liblto_plugin.so).
 # ─────────────────────────────────────────────────────────────────
 build_gcc_pass2() {
   [[ -f "${WORK_DIR}/.stamp_gcc_pass2" ]] && { ok "GCC Pass 2 already built [cached]"; return 0; }
@@ -507,8 +515,6 @@ _build_gcc_pass2_standard() {
   _configure_gcc "gcc-${GCC_VER}" \
       --enable-shared \
       --enable-threads=posix \
-      --enable-lto \
-      --enable-plugins \
       --enable-linker-build-id \
       --enable-default-ssp \
       --enable-default-pie \
@@ -547,8 +553,6 @@ _build_gcc_pass2_pgo() {
   _configure_gcc "gcc-${GCC_VER}" \
       --enable-shared \
       --enable-threads=posix \
-      --enable-lto \
-      --enable-plugins \
       --enable-linker-build-id \
       --enable-default-ssp \
       --enable-default-pie \
