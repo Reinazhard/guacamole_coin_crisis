@@ -33,12 +33,14 @@ elapsed() {
 }
 
 # ─────────────────────────────────────────────────────────────────
-# VERSION PINS
-# Pinned to stable releases for reproducibility.
-# Do not use "latest" or branch-following versions.
+# VERSION PINS & SOURCE REPOSITORIES
 # ─────────────────────────────────────────────────────────────────
-BINUTILS_VER="2.46.0"
-GCC_VER="15.2.0"
+GCC_BRANCH="releases/gcc-15"
+BINUTILS_BRANCH="binutils-2_46-branch"
+
+GCC_COMMIT=""
+BINUTILS_COMMIT=""
+
 GLIBC_VER="2.43"
 LINUX_VER="6.19"
 GMP_VER="6.3.0"
@@ -51,26 +53,17 @@ ISL_VER="0.26"
 #
 # BUILD_CFLAGS  — flags for tools that run on the build machine during
 #                 the build process (e.g. genscripts, fixincludes).
-#                 Conservative: just optimise, no host-specific tuning.
 #
 # HOST_CFLAGS   — flags used to compile the cross-compiler itself.
-#                 The resulting binaries run on the HOST machine.
-#                 Do NOT use -march=native: the toolchain must be
-#                 redistributable to any x86_64 host.
 #
 # TARGET_CFLAGS — flags used when compiling libraries that run on the
 #                 TARGET (libgcc, libstdc++, glibc).
-#                 MUST NOT contain -march or -mtune: these libraries
-#                 must be generic enough to run on any ARMv8-A core.
-#                 The kernel does not use libstdc++; glibc must be
-#                 portable. Specialisation is done by the end-user
-#                 at kernel build time via KCFLAGS.
 # ─────────────────────────────────────────────────────────────────
 BUILD_CFLAGS="-O2 -pipe"
 BUILD_CXXFLAGS="-O2 -pipe"
 
-HOST_CFLAGS="-O2 -pipe"
-HOST_CXXFLAGS="-O2 -pipe"
+HOST_CFLAGS="-O3 -pipe -g -gsplit-dwarf -fno-plt"
+HOST_CXXFLAGS="-O3 -pipe -g -gsplit-dwarf -fno-plt"
 
 TARGET_CFLAGS="-O2 -pipe -fstack-protector-strong -ffunction-sections -fdata-sections"
 TARGET_CXXFLAGS="-O2 -pipe -fstack-protector-strong -ffunction-sections -fdata-sections"
@@ -155,17 +148,10 @@ esac
 export WORK_DIR="$PWD"
 export PREFIX="${WORK_DIR}/gcc-${ARCH}"
 export SYSROOT="${PREFIX}/${TARGET}/sysroot"
-
-# Prepend the new toolchain's bin dir so pass-2 and glibc builds
-# can find the just-built cross-assembler / cross-linker.
 export PATH="${PREFIX}/bin:/usr/bin/core_perl:${PATH}"
 
-# ── Build machine triple ──────────────────────────────────────────
-# Use the compiler to report its own triple — more reliable than $MACHTYPE
-# which is a bash-ism and may not reflect multilib hosts correctly.
+# ── Build machine triple & Parallelism ─────────────────────────────────
 BUILD_TRIPLE="$(cc -dumpmachine)"
-
-# ── Parallelism ───────────────────────────────────────────────────
 JOBS=$(nproc --all)
 export MAKEFLAGS="-j${JOBS}"
 
@@ -184,7 +170,7 @@ echo
 # ─────────────────────────────────────────────────────────────────
 check_deps() {
   local missing=()
-  for cmd in gcc g++ make bison flex makeinfo gawk curl tar xz; do
+  for cmd in gcc g++ make bison flex makeinfo gawk curl tar xz git zstd; do
     command -v "$cmd" &>/dev/null || missing+=("$cmd")
   done
   (( ${#missing[@]} == 0 )) || \
@@ -211,11 +197,31 @@ fetch() {
 download_resources() {
   [[ -f "${WORK_DIR}/.stamp_downloaded" ]] && return 0
 
-  header "DOWNLOADING SOURCES"
+  header "DOWNLOADING & CLONING SOURCES"
   mkdir -p sources
 
-  fetch "https://ftp.gnu.org/gnu/binutils/binutils-${BINUTILS_VER}.tar.xz"
-  fetch "https://ftp.gnu.org/gnu/gcc/gcc-${GCC_VER}/gcc-${GCC_VER}.tar.xz"
+  # Git Sources
+  if [[ ! -d "gcc-src" ]]; then
+    log "Cloning GCC from ${GCC_BRANCH}..."
+    git clone --depth=1 --branch="${GCC_BRANCH}" https://gnu.googlesource.com/gcc gcc-src
+    if [[ -n "${GCC_COMMIT}" ]]; then
+      log "Pinning GCC to commit: ${GCC_COMMIT}"
+      git -C gcc-src fetch --depth=1 origin "${GCC_COMMIT}"
+      git -C gcc-src checkout "${GCC_COMMIT}"
+    fi
+  fi
+
+  if [[ ! -d "binutils-src" ]]; then
+    log "Cloning Binutils from ${BINUTILS_BRANCH}..."
+    git clone --depth=1 --branch="${BINUTILS_BRANCH}" https://gnu.googlesource.com/binutils-gdb binutils-src
+    if [[ -n "${BINUTILS_COMMIT}" ]]; then
+      log "Pinning Binutils to commit: ${BINUTILS_COMMIT}"
+      git -C binutils-src fetch --depth=1 origin "${BINUTILS_COMMIT}"
+      git -C binutils-src checkout "${BINUTILS_COMMIT}"
+    fi
+  fi
+
+  # Tarball sources
   fetch "https://ftp.gnu.org/gnu/glibc/glibc-${GLIBC_VER}.tar.xz"
   fetch "https://cdn.kernel.org/pub/linux/kernel/v${LINUX_VER%%.*}.x/linux-${LINUX_VER}.tar.xz"
   fetch "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VER}.tar.xz"
@@ -226,8 +232,6 @@ download_resources() {
   header "EXTRACTING SOURCES"
 
   for pkg in \
-    "binutils-${BINUTILS_VER}" \
-    "gcc-${GCC_VER}" \
     "glibc-${GLIBC_VER}" \
     "linux-${LINUX_VER}" \
     "gmp-${GMP_VER}" \
@@ -247,14 +251,14 @@ download_resources() {
   log "Linking GCC prerequisites in-tree..."
   for dep_dir in "gmp-${GMP_VER}" "mpfr-${MPFR_VER}" "mpc-${MPC_VER}" "isl-${ISL_VER}"; do
     local dep_name="${dep_dir%%-*}"
-    ln -sfn "../${dep_dir}" "gcc-${GCC_VER}/${dep_name}"
+    ln -sfn "../${dep_dir}" "gcc-src/${dep_name}"
   done
 
-  # Binutils can also use in-tree prerequisites.
+  # Symlink prerequisites to Binutils
   log "Linking Binutils prerequisites in-tree..."
   for dep_dir in "gmp-${GMP_VER}" "mpfr-${MPFR_VER}" "mpc-${MPC_VER}" "isl-${ISL_VER}"; do
     local dep_name="${dep_dir%%-*}"
-    ln -sfn "../${dep_dir}" "binutils-${BINUTILS_VER}/${dep_name}"
+    ln -sfn "../${dep_dir}" "binutils-src/${dep_name}"
   done
 
   touch "${WORK_DIR}/.stamp_downloaded"
@@ -276,9 +280,6 @@ download_resources() {
 #   binary relying only on the host's libc, which is usually safe.
 #   A fully -static binutils kills dynamic dlopen() support preventing
 #   liblto_plugin.so from loading. This is the hybrid compromise.
-#
-#   Gold linker (--enable-gold) removed: gold is deprecated upstream
-#   and was removed in the binutils 2.44 development cycle.
 # ─────────────────────────────────────────────────────────────────
 build_binutils() {
   [[ -f "${WORK_DIR}/.stamp_binutils" ]] && { ok "Binutils already built [cached]"; return 0; }
@@ -287,7 +288,7 @@ build_binutils() {
   cd "${WORK_DIR}"
   mkdir -p build-binutils && cd build-binutils
 
-  ../binutils-${BINUTILS_VER}/configure \
+  ../binutils-src/configure \
       --target="${TARGET}" \
       --prefix="${PREFIX}" \
       --with-sysroot="${SYSROOT}" \
@@ -348,9 +349,6 @@ build_linux_headers() {
 #
 # ─────────────────────────────────────────────────────────────────
 _configure_gcc() {
-  # Common GCC configure invocation shared between pass 1 and pass 2.
-  # $1 = source dir relative to WORK_DIR (e.g. "gcc-${GCC_VER}")
-  # Remaining args are appended verbatim (pass-specific flags).
   local src_dir="$1"; shift
 
   "../${src_dir}/configure" \
@@ -399,7 +397,7 @@ build_gcc_pass1() {
   cd "${WORK_DIR}"
   mkdir -p build-gcc-pass1 && cd build-gcc-pass1
 
-  _configure_gcc "gcc-${GCC_VER}" \
+  _configure_gcc "gcc-src" \
       --without-headers \
       --with-newlib \
       --disable-shared \
@@ -479,21 +477,6 @@ build_glibc() {
 
 # ─────────────────────────────────────────────────────────────────
 # STAGE 5: GCC PASS 2 (Final Compiler)
-#
-# Full-featured compiler with threads, shared libraries, C++, LTO.
-# This is the compiler that kernel developers will actually use.
-#
-# --enable-default-pie: produces position-independent executables by
-#   default. Safe default; kernel build explicitly disables this via
-#   -fno-PIE / -no-pie in its own Makefile.
-# --enable-default-ssp: enables stack-smashing protection by default.
-#   Same reasoning: can be overridden per-project.
-#
-# LDFLAGS="-static-libstdc++ -static-libgcc": Hybrid static linking model.
-#   A fully bare LDFLAGS="-static" breaks dynamic LTO plugins from loading.
-#   This approach statically embeds complex GCC C++ internals (libstdc++)
-#   into the binary ensuring very high portability, while preserving glibc's
-#   dynamic loader necessary for dlopen(liblto_plugin.so).
 # ─────────────────────────────────────────────────────────────────
 build_gcc_pass2() {
   [[ -f "${WORK_DIR}/.stamp_gcc_pass2" ]] && { ok "GCC Pass 2 already built [cached]"; return 0; }
@@ -512,7 +495,7 @@ _build_gcc_pass2_standard() {
   cd "${WORK_DIR}"
   mkdir -p build-gcc-pass2 && cd build-gcc-pass2
 
-  _configure_gcc "gcc-${GCC_VER}" \
+  _configure_gcc "gcc-src" \
       --enable-shared \
       --enable-threads=posix \
       --enable-linker-build-id \
@@ -550,7 +533,7 @@ _build_gcc_pass2_pgo() {
   cd "${WORK_DIR}"
   mkdir -p build-gcc-pgo && cd build-gcc-pgo
 
-  _configure_gcc "gcc-${GCC_VER}" \
+  _configure_gcc "gcc-src" \
       --enable-shared \
       --enable-threads=posix \
       --enable-linker-build-id \
@@ -569,9 +552,33 @@ _build_gcc_pass2_pgo() {
 }
 
 # ─────────────────────────────────────────────────────────────────
+# PACKAGE ARTIFACT
+# ─────────────────────────────────────────────────────────────────
+package_artifact() {
+  header "STAGE 6: PACKAGING"
+  
+  local gcc_hash_short=$(git -C gcc-src rev-parse --short HEAD)
+  local binutils_hash_short=$(git -C binutils-src rev-parse --short HEAD)
+  local date_str=$(date +%Y.%m.%d)
+  
+  export ARTIFACT_NAME="toolchain-${ARCH}-${date_str}-gcc${gcc_hash_short}-binutils${binutils_hash_short}.tar.zst"
+  
+  log "Creating artifact: ${ARTIFACT_NAME}"
+  tar --zstd -cf "${ARTIFACT_NAME}" -C "${WORK_DIR}" "$(basename "${PREFIX}")"
+  
+  ok "Packaging done  [$(elapsed)]"
+}
+
+# ─────────────────────────────────────────────────────────────────
 # SUMMARY
 # ─────────────────────────────────────────────────────────────────
 print_summary() {
+  local gcc_hash_full=$(git -C gcc-src rev-parse HEAD)
+  local gcc_hash_short=$(git -C gcc-src rev-parse --short HEAD)
+  
+  local binutils_hash_full=$(git -C binutils-src rev-parse HEAD)
+  local binutils_hash_short=$(git -C binutils-src rev-parse --short HEAD)
+  
   echo
   echo -e "${BOLD}╔══════════════════════════════════════════════════════════╗"
   echo -e "║                    Toolchain Summary                    ║"
@@ -579,6 +586,11 @@ print_summary() {
   printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Target triple:"  "${TARGET}"
   printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Installed to:"   "${PREFIX}"
   printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Sysroot:"        "${SYSROOT}"
+  printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "GCC branch:"     "${GCC_BRANCH}"
+  printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "GCC commit:"     "${gcc_hash_short} (${gcc_hash_full:0:16}...)"
+  printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Binutils branch:" "${BINUTILS_BRANCH}"
+  printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Binutils commit:" "${binutils_hash_short} (${binutils_hash_full:0:16}...)"
+  printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Artifact:"       "${ARTIFACT_NAME}"
   printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "PGO:"            "${ENABLE_PGO}"
   printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Total time:"     "$(elapsed)"
   echo -e "${BOLD}╚══════════════════════════════════════════════════════════╝${RESET}"
@@ -600,4 +612,5 @@ build_linux_headers
 build_gcc_pass1
 build_glibc
 build_gcc_pass2
+package_artifact
 print_summary

@@ -14,9 +14,8 @@ on:
   workflow_dispatch:
 
 env:
-  BINUTILS_BRANCH: "binutils-2_46"
+  BINUTILS_BRANCH: "binutils-2_46-branch"
   GCC_BRANCH: "releases/gcc-15"
-  DEBIAN_FRONTEND: "noninteractive"
 
 jobs:
   build-toolchain:
@@ -43,26 +42,16 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm base-devel git bison flex texinfo gawk curl tar xz file ncurses python glibc automake autoconf pkgconf gettext rsync zstd cpio kmod bc patch libtool wget gmp mpfr libmpc isl zlib gperf expat openssl
-          chmod +x build.sh strip.sh
+          chmod +x build.sh
 
       - name: Build GCC Toolchain
         run: |
           echo "--- Building GCC for ${{ matrix.arch }} / ${{ matrix.target_triple }} ---"
           bash build.sh -a "${{ matrix.arch }}"
 
-      - name: Strip binaries
-        run: |
-          echo "--- Stripping binaries ---"
-          bash strip.sh "gcc-${{ matrix.arch }}/"
-
-      - name: Package artifact
-        run: |
-          echo "--- Packaging artifact ---"
-          env XZ_OPT="-T0 -9" tar -cJf "gcc-${{ matrix.arch }}-${{ matrix.target_triple }}.tar.xz" "gcc-${{ matrix.arch }}/"
-
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: gcc-${{ matrix.arch }}-${{ github.sha }}
-          path: "*.tar.xz"
+          path: "*.tar.zst"
           retention-days: 30
