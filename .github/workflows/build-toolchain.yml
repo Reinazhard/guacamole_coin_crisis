@@ -1,0 +1,69 @@
+name: Build Toolchain
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  schedule:
+    - cron: '0 0 * * 0' # Matches the schedule pipeline trigger
+  workflow_dispatch:
+
+env:
+  BINUTILS_BRANCH: "binutils-2_46"
+  GCC_BRANCH: "releases/gcc-15"
+  DEBIAN_FRONTEND: "noninteractive"
+
+jobs:
+  build-toolchain:
+    name: Build ${{ matrix.arch }} (${{ matrix.target_triple }})
+    runs-on: ubuntu-latest
+    container:
+      image: buildpack-deps:26.04-scm
+    timeout-minutes: 360 # 6 hours timeout
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: "arm64"
+            target_triple: "aarch64-linux-gnu"
+          - arch: "arm"
+            target_triple: "arm-linux-gnueabihf"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1 # Shallow clone
+
+      - name: Install dependencies
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends build-essential bison flex texinfo gawk libgmp-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev git xz-utils ca-certificates file ncurses-dev gcc gperf patch libtool automake g++ libncurses5-dev subversion expat libexpat1-dev python3-all-dev binutils-dev bc libcap-dev autoconf autoconf-archive gcc-multilib g++-multilib pkg-config autopoint gettext liblzma-dev libssl-dev libz-dev rsync zstd cpio kmod
+          chmod +x build.sh strip.sh
+
+      - name: Build GCC Toolchain
+        run: |
+          echo "--- Building GCC for ${{ matrix.arch }} / ${{ matrix.target_triple }} ---"
+          bash build.sh -a "${{ matrix.arch }}"
+
+      - name: Strip binaries
+        run: |
+          echo "--- Stripping binaries ---"
+          bash strip.sh "gcc-${{ matrix.arch }}/"
+
+      - name: Package artifact
+        run: |
+          echo "--- Packaging artifact ---"
+          env XZ_OPT="-T0 -9" tar -cJf "gcc-${{ matrix.arch }}-${{ matrix.target_triple }}.tar.xz" "gcc-${{ matrix.arch }}/"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gcc-${{ matrix.arch }}-${{ github.sha }}
+          path: "*.tar.xz"
+          retention-days: 30

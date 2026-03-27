@@ -18,6 +18,17 @@ ok()   { echo -e "${GREEN}${BOLD}[DONE]${RESET}  $*"; }
 warn() { echo -e "${YELLOW}${BOLD}[WARN]${RESET}  $*"; }
 die()  { echo -e "${RED}${BOLD}[FAIL]${RESET}  $*" >&2; exit 1; }
 
+header() {
+  local len=${#1}
+  local padding=""
+  for ((i=0; i<len; i++)); do padding="${padding}="; done
+  echo
+  echo -e "${YELLOW}${BOLD}====${padding}===="
+  echo -e "==  ${1}  =="
+  echo -e "====${padding}====${RESET}"
+  echo
+}
+
 # ── Elapsed-time tracker ──────────────────────────────────────────
 START_TIME=$(date +%s)
 elapsed() {
@@ -35,8 +46,16 @@ echo -e "${RESET}"
 
 # ── Argument parsing ──────────────────────────────────────────────
 ENABLE_PGO=false
-BINUTILS_BRANCH="binutils-2_46"
-GCC_BRANCH="releases/gcc-15"
+
+# Consistent deterministic versions for reproducibility and caching
+BINUTILS_VER="2.46.0"
+GCC_VER="15.2.0"
+GLIBC_VER="2.43"
+LINUX_VER="6.19"
+GMP_VER="6.3.0"
+MPFR_VER="4.2.2"
+MPC_VER="1.4.0"
+ISL_VER="0.26"
 
 usage() {
   echo "Usage: $0 -a <arch> [-p]"
@@ -58,19 +77,22 @@ done
 # ── Target resolution ─────────────────────────────────────────────
 case "${arch}" in
   "arm")
-    TARGET="arm-linux-gnueabi"
-    EXTRA_GCC_FLAGS="--with-fpu=crypto-neon-fp-armv8"
-    TARGET_ARCH="armv8.2-a+crypto+dotprod+fp16+rcpc+ssbs+sb"
-    TARGET_TUNE="cortex-a76.cortex-a55"
+    TARGET="arm-linux-gnueabihf"
+    KERNEL_ARCH="arm"
+    EXTRA_GCC_FLAGS="--with-fpu=neon-fp-armv8 --with-float=hard"
+    TARGET_ARCH="armv8.2-a"
+    TARGET_TUNE="cortex-a55"
     ;;
   "arm64")
     TARGET="aarch64-linux-gnu"
+    KERNEL_ARCH="arm64"
     EXTRA_GCC_FLAGS="--with-abi=lp64 --enable-fix-cortex-a53-835769 --enable-fix-cortex-a53-843419"
     TARGET_ARCH="armv8.2-a+crypto+dotprod+fp16+rcpc+ssbs+sb"
     TARGET_TUNE="cortex-a76.cortex-a55"
     ;;
   "x86")
     TARGET="x86_64-linux-gnu"
+    KERNEL_ARCH="x86"
     EXTRA_GCC_FLAGS=""
     TARGET_ARCH="x86-64-v3"
     TARGET_TUNE="skylake"
@@ -83,55 +105,37 @@ esac
 # ── Paths ─────────────────────────────────────────────────────────
 export WORK_DIR="$PWD"
 export PREFIX="$WORK_DIR/gcc-${arch}"
+export SYSROOT="$PREFIX/$TARGET/sysroot"
 export PATH="$PREFIX/bin:/usr/bin/core_perl:$PATH"
 
 # ── Parallelism ───────────────────────────────────────────────────
-# Use all available logical CPUs for maximum build speed.
 JOBS=$(nproc --all)
+export MAKEFLAGS="-j${JOBS}"
 log "Detected ${JOBS} logical CPUs → using ${JOBS} parallel jobs"
 
 # ── Host compiler optimisation flags ─────────────────────────────
-# These flags build the compiler itself as fast as possible on the
-# host machine.  march=native lets the host CPU (your PC) use every
-# instruction it supports while compiling GCC.
 HOST_OPT_FLAGS=(
+  "-g0"
   "-O3"
-  "-march=native"               # exploit every host CPU feature
+  "-march=native"
   "-mtune=native"
-  "-pipe"                       # avoid temp files between compiler passes
-  "-fomit-frame-pointer"        # free one register on x86-64
-  "-ffunction-sections"         # allow linker to GC unused text sections
-  "-fdata-sections"             # same for data
-  "-flto=auto"                  # multi-threaded Link Time Optimization (GCC)
-  "-ffat-lto-objects"           # Generates standard object code alongside LTO to prevent configure script failures
-  "-flto-compression-level=6"   # maximum compression for LTO bitcode (GCC 15+)
-  "-fuse-linker-plugin"         # enable linker plugin optimizations (GCC 10+
+  "-pipe"
+  "-fomit-frame-pointer"
+  "-fstack-protector-strong"
+  "-ffunction-sections"
+  "-fdata-sections"
+  "-flto=auto"
+  "-ffat-lto-objects"
+  "-flto-compression-level=6"
+  "-fuse-linker-plugin"
 )
 OPT_FLAGS="${HOST_OPT_FLAGS[*]}"
 export OPT_FLAGS
 
-# ── Target — target-code default flags (baked into the toolchain)
-# These become the *default* -march/-mtune the produced GCC will use
-# when compiling Android source unless overridden by the caller.
-#
-#   armv8.2-a   — baseline for all three cores (X1, A76, A55)
-#   +crypto     — AES / PMULL / SHA{1,2,512} hardware acceleration
-#   +dotprod    — UDOT/SDOT used heavily by ML kernels (NNAPI, tflite)
-#   +fp16       — half-precision FP (camera / ML pipelines)
-#   +rcpc       — Release-Consistent Processor Consistent load (atomics)
-#   +ssbs       — Speculative Store Bypass Safe (Spectre-v4 mitigation)
-#   +sb         — Speculation Barrier
-#
-# Tune = cortex-a76.cortex-a55: schedules for the wide,
-# OoO A76 and the small, in-order A55.  The resulting GCC will
-# generate code that runs well on both cores, which is ideal
-# for Android's heterogeneous big.LITTLE architecture and
-# the Pixel 6's specific CPU configuration.
-
-
 # ─────────────────────────────────────────────────────────────────
 log "Work dir : ${WORK_DIR}"
 log "Prefix   : ${PREFIX}"
+log "Sysroot  : ${SYSROOT}"
 log "Target   : ${TARGET}"
 log "Arch     : ${TARGET_ARCH}  tune=${TARGET_TUNE}"
 log "PGO      : ${ENABLE_PGO}"
@@ -140,7 +144,7 @@ echo ""
 # ── Dependency check ──────────────────────────────────────────────
 check_deps() {
   local missing=()
-  for cmd in git make gcc g++ bison flex makeinfo gawk; do
+  for cmd in gcc g++ make bison flex makeinfo gawk curl tar xz; do
     command -v "$cmd" &>/dev/null || missing+=("$cmd")
   done
   if [[ ${#missing[@]} -gt 0 ]]; then
@@ -148,47 +152,95 @@ check_deps() {
   fi
 }
 
-# ── Clean previous artefacts ──────────────────────────────────────
-clean_previous() {
-  log "Removing previous build directories..."
-  rm -rf "$WORK_DIR"/{binutils,build-binutils,build-gcc,gcc}
+# ── Fetch helper ──────────────────────────────────────────────────
+fetch() {
+  local url="$1"
+  local file="${url##*/}"
+  if [[ ! -f "sources/$file" ]]; then
+    log "Downloading $file..."
+    curl -L --retry 3 -o "sources/$file" "$url"
+  else
+    ok "Cached $file"
+  fi
 }
 
-# ── Download ──────────────────────────────────────────────────────
+# ── Download and extract ──────────────────────────────────────────
 download_resources() {
-  log "Cloning binutils (branch: ${BINUTILS_BRANCH})..."
-  git clone https://sourceware.org/git/binutils-gdb.git \
-    -b "${BINUTILS_BRANCH}" binutils \
-    --depth=1 --single-branch --no-tags
-  # Mark as release (not a development snapshot) to avoid assert()-heavy paths
-  sed -i '/^development=/s/true/false/' binutils/bfd/development.sh
-  ok "Cloned binutils"
+  if [[ -f "${WORK_DIR}/.stamp_downloaded" ]]; then
+    return 0
+  fi
+  header "DOWNLOADING AND EXTRACTING RESOURCES"
+  mkdir -p sources
+  fetch "https://ftp.gnu.org/gnu/binutils/binutils-${BINUTILS_VER}.tar.xz"
+  fetch "https://ftp.gnu.org/gnu/gcc/gcc-${GCC_VER}/gcc-${GCC_VER}.tar.xz"
+  fetch "https://ftp.gnu.org/gnu/glibc/glibc-${GLIBC_VER}.tar.xz"
+  fetch "https://cdn.kernel.org/pub/linux/kernel/v${LINUX_VER%%.*}.x/linux-${LINUX_VER}.tar.xz"
 
-  log "Cloning GCC (branch: ${GCC_BRANCH})..."
-  git clone https://gcc.gnu.org/git/gcc.git \
-    -b "${GCC_BRANCH}" gcc \
-    --depth=1 --single-branch --no-tags
-  ok "Cloned GCC"
+  # GCC dependencies
+  fetch "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VER}.tar.xz"
+  fetch "https://ftp.gnu.org/gnu/mpfr/mpfr-${MPFR_VER}.tar.xz"
+  fetch "https://ftp.gnu.org/gnu/mpc/mpc-${MPC_VER}.tar.xz"
+  fetch "https://libisl.sourceforge.io/isl-${ISL_VER}.tar.xz"
 
+  for pkg in binutils-${BINUTILS_VER} gcc-${GCC_VER} glibc-${GLIBC_VER} linux-${LINUX_VER}; do
+    if [[ ! -d "$pkg" ]]; then
+      log "Extracting $pkg..."
+      tar xf "sources/${pkg}.tar."*
+    fi
+  done
+
+  # Extract GCC prerequisites (GMP, MPFR, MPC, ISL) in root for native integration
+  for dep in gmp mpfr mpc isl; do
+    local dep_ver_var="${dep^^}_VER"
+    local dep_ver="${!dep_ver_var}"
+    if [[ ! -d "${dep}-${dep_ver}" ]]; then
+      log "Extracting native dep: $dep..."
+      tar xf "sources/${dep}-${dep_ver}.tar."*
+    fi
+  done
+
+  # Integrate dependencies natively into GCC
+  cd "gcc-${GCC_VER}"
+  for dep in gmp mpfr mpc isl; do
+    local dep_ver_var="${dep^^}_VER"
+    local dep_ver="${!dep_ver_var}"
+    [[ ! -L "$dep" ]] && ln -s -f "../${dep}-${dep_ver}" "$dep"
+  done
   cd "${WORK_DIR}"
-  ok "All sources ready"
+
+  # Integrate dependencies natively into Binutils
+  cd "binutils-${BINUTILS_VER}"
+  for dep in gmp mpfr mpc isl; do
+    local dep_ver_var="${dep^^}_VER"
+    local dep_ver="${!dep_ver_var}"
+    [[ ! -L "$dep" ]] && ln -s -f "../${dep}-${dep_ver}" "$dep"
+  done
+  cd "${WORK_DIR}"
+  
+  touch "${WORK_DIR}/.stamp_downloaded"
+  ok "All sources natively linked and ready"
 }
 
 # ── Binutils ──────────────────────────────────────────────────────
 build_binutils() {
+  if [[ -f "${WORK_DIR}/.stamp_binutils" ]]; then
+    ok "Binutils already built [cached]"
+    return 0
+  fi
+  header "BUILDING BINUTILS"
   cd "${WORK_DIR}"
   log "Configuring binutils..."
   mkdir -p build-binutils && cd build-binutils
 
-  env CFLAGS="$OPT_FLAGS" CXXFLAGS="$OPT_FLAGS" LDFLAGS="-static" \
-    ../binutils/configure \
+  ../binutils-${BINUTILS_VER}/configure \
       --target="$TARGET" \
       --prefix="$PREFIX" \
-      --with-sysroot \
+      --with-sysroot="$SYSROOT" \
       --with-arch="${TARGET_ARCH}" \
       --with-tune="${TARGET_TUNE}" \
       --enable-static \
       --disable-shared \
+      --enable-gold \
       --enable-plugins \
       --enable-relro \
       --enable-threads \
@@ -204,191 +256,242 @@ build_binutils() {
       --disable-nls \
       --disable-sim \
       --disable-werror \
+      CFLAGS="$OPT_FLAGS" \
+      CXXFLAGS="$OPT_FLAGS" \
+      LDFLAGS="-static" \
       2>&1 | tee "${WORK_DIR}/configure-binutils.log"
 
-  log "Building binutils (${JOBS} jobs)..."
-  make -j"$JOBS" > "${WORK_DIR}/build-binutils.log"
-  make install -j"$JOBS" > /dev/null
+  log "Building binutils..."
+  make
+  make install
+  touch "${WORK_DIR}/.stamp_binutils"
   cd "${WORK_DIR}"
   ok "Binutils built and installed  [$(elapsed)]"
 }
 
-# ── GCC (standard or PGO) ─────────────────────────────────────────
-_configure_gcc() {
-  # $1 = --prefix override (used during PGO bootstrap)
-  local prefix="${1:-$PREFIX}"
+# ── Linux Headers ─────────────────────────────────────────────────
+build_linux_headers() {
+  if [[ -f "${WORK_DIR}/.stamp_linux_headers" ]]; then
+    ok "Linux headers already installed [cached]"
+    return 0
+  fi
+  header "MAKING LINUX HEADERS"
+  cd "${WORK_DIR}/linux-${LINUX_VER}"
+  log "Installing Linux headers..."
+  make ARCH="${KERNEL_ARCH}" INSTALL_HDR_PATH="${SYSROOT}/usr" headers_install
+  touch "${WORK_DIR}/.stamp_linux_headers"
+  cd "${WORK_DIR}"
+  ok "Linux headers installed  [$(elapsed)]"
+}
 
-  env CFLAGS="$OPT_FLAGS" CXXFLAGS="$OPT_FLAGS" LDFLAGS="-static" \
-    ../gcc/configure \
+# ── GCC Pass 1 (Initial / Core) ───────────────────────────────────
+_configure_gcc_pass1() {
+  local build_dir="$1"
+  local extra_opts="${2:-}"
+
+  cd "${WORK_DIR}"
+  mkdir -p "${build_dir}" && cd "${build_dir}"
+
+  ../gcc-${GCC_VER}/configure \
       --target="$TARGET" \
-      --prefix="$prefix" \
-      \
-      `# ── Target architecture defaults ─────────────────────────` \
+      --prefix="$PREFIX" \
+      --with-sysroot="$SYSROOT" \
+      --with-build-sysroot="$SYSROOT" \
+      --with-native-system-header-dir="/usr/include" \
       --with-arch="${TARGET_ARCH}" \
       --with-tune="${TARGET_TUNE}" \
+      --with-pkgversion="Bleeding-Edge GCC" \
       ${EXTRA_GCC_FLAGS} \
-      \
-      `# ── Language & runtime ────────────────────────────────` \
+      --with-glibc-version="${GLIBC_VER}" \
+      --enable-languages=c,c++ \
+      --without-headers \
+      --with-newlib \
+      --disable-shared \
+      --disable-threads \
+      --disable-libatomic \
+      --disable-libgomp \
+      --disable-libquadmath \
+      --disable-libssp \
+      --disable-libvtv \
+      --disable-libstdcxx \
+      --disable-decimal-float \
+      --disable-docs \
+      --disable-gcov \
+      --disable-libffi \
+      --disable-libmudflap \
+      --disable-libsanitizer \
+      --disable-multilib \
+      --disable-nls \
+      --disable-werror \
+      CFLAGS="${OPT_FLAGS}" \
+      CXXFLAGS="${OPT_FLAGS}" \
+      CFLAGS_FOR_TARGET="-O2 -g " \
+      CXXFLAGS_FOR_TARGET="-O2 -g " \
+      LDFLAGS="-static" \
+      ${extra_opts} \
+      2>&1 | tee "${WORK_DIR}/configure-gcc-pass1.log"
+}
+
+build_gcc_pass1() {
+  if [[ -f "${WORK_DIR}/.stamp_gcc_pass1" ]]; then
+    ok "GCC Pass 1 already built [cached]"
+    return 0
+  fi
+  header "BUILDING GCC PASS 1 (CORE BOOTSTRAP)"
+  _configure_gcc_pass1 "build-gcc-pass1"
+
+  make all-gcc
+  make install-gcc
+
+  make all-target-libgcc
+  make install-target-libgcc
+
+  touch "${WORK_DIR}/.stamp_gcc_pass1"
+  cd "${WORK_DIR}"
+  ok "GCC Pass 1 built and installed  [$(elapsed)]"
+}
+
+# ── Glibc ─────────────────────────────────────────────────────────
+build_glibc() {
+  if [[ -f "${WORK_DIR}/.stamp_glibc" ]]; then
+    ok "Glibc already built [cached]"
+    return 0
+  fi
+  header "BUILDING GLIBC"
+  cd "${WORK_DIR}"
+  log "Configuring glibc..."
+  mkdir -p build-glibc && cd build-glibc
+
+  ../glibc-${GLIBC_VER}/configure \
+      --host="$TARGET" \
+      --build="$MACHTYPE" \
+      --prefix="/usr" \
+      --with-headers="${SYSROOT}/usr/include" \
+      --disable-multilib \
+      --disable-werror \
+      libc_cv_forced_unwind=yes \
+      with_selinux=no \
+      CC="${TARGET}-gcc" \
+      CXX="${TARGET}-g++" \
+      CFLAGS="-g0 -O3 -fstack-protector-strong -ffunction-sections -fdata-sections" \
+      CXXFLAGS="-g0 -O3 -fstack-protector-strong -ffunction-sections -fdata-sections" \
+      2>&1 | tee "${WORK_DIR}/configure-glibc.log"
+
+  log "Building glibc bootstrap headers & dummy libc..."
+  mkdir -p elf
+  make install-bootstrap-headers=yes install-headers
+  make csu/subdir_lib
+
+  mkdir -p "${SYSROOT}/usr/lib" "${SYSROOT}/usr/include/gnu"
+  install csu/crt1.o csu/crti.o csu/crtn.o "${SYSROOT}/usr/lib"
+  ${TARGET}-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o "${SYSROOT}/usr/lib/libc.so"
+  touch "${SYSROOT}/usr/include/gnu/stubs.h"
+
+  log "Building glibc final..."
+  make
+  make install_root="${SYSROOT}" install
+
+  touch "${WORK_DIR}/.stamp_glibc"
+  cd "${WORK_DIR}"
+  ok "Glibc built and installed  [$(elapsed)]"
+}
+
+# ── GCC Pass 2 (Final) ────────────────────────────────────────────
+_configure_gcc_pass2() {
+  local build_dir="$1"
+  local extra_cflags="${2:-}"
+
+  cd "${WORK_DIR}"
+  mkdir -p "${build_dir}" && cd "${build_dir}"
+
+  ../gcc-${GCC_VER}/configure \
+      --target="$TARGET" \
+      --prefix="$PREFIX" \
+      --with-sysroot="$SYSROOT" \
+      --with-build-sysroot="$SYSROOT" \
+      --with-native-system-header-dir="/usr/include" \
+      --with-arch="${TARGET_ARCH}" \
+      --with-tune="${TARGET_TUNE}" \
+      --with-pkgversion="Bleeding-Edge GCC" \
+      ${EXTRA_GCC_FLAGS} \
+      --with-glibc-version="${GLIBC_VER}" \
       --enable-languages=c,c++ \
       --enable-threads=posix \
       --enable-default-ssp \
       --enable-default-pie \
       --enable-linker-build-id \
-      \
-      `# ── LTO & optimiser plugins ───────────────────────────` \
       --enable-lto \
       --enable-plugins \
-      \
-      `# ── Linker integration ────────────────────────────────` \
+      --enable-shared \
+      --enable-__cxa_atexit \
       --with-gnu-as \
       --with-gnu-ld \
       --with-linker-hash-style=gnu \
-      \
-      `# ── Sysroot / runtime ─────────────────────────────────` \
-      --with-headers="/usr/include" \
-      --with-newlib \
-      --with-sysroot \
-      \
-      `# ── Disabled features (keep the toolchain lean) ───────` \
       --disable-decimal-float \
       --disable-docs \
       --disable-gcov \
       --disable-libffi \
-      --disable-libgomp \
       --disable-libmudflap \
-      --disable-libquadmath \
       --disable-libsanitizer \
       --disable-libstdcxx-pch \
       --disable-multilib \
       --disable-nls \
-      --disable-shared \
       --disable-werror \
-      2>&1 | tee "${WORK_DIR}/configure-gcc.log"
+      CFLAGS="${OPT_FLAGS} ${extra_cflags}" \
+      CXXFLAGS="${OPT_FLAGS} ${extra_cflags}" \
+      CFLAGS_FOR_TARGET="-g0 -O3 -fstack-protector-strong" \
+      CXXFLAGS_FOR_TARGET="-g0 -O3 -fstack-protector-strong" \
+      LDFLAGS="-static" \
+      2>&1 | tee "${WORK_DIR}/configure-gcc-pass2.log"
 }
 
-build_gcc() {
-  cd "${WORK_DIR}"
-  log "Preparing GCC sources..."
-  cd gcc
-  ./contrib/download_prerequisites
-  cd "${WORK_DIR}"
-
+build_gcc_pass2() {
+  if [[ -f "${WORK_DIR}/.stamp_gcc_pass2" ]]; then
+    ok "GCC Pass 2 already built [cached]"
+    return 0
+  fi
   if $ENABLE_PGO; then
     _build_gcc_pgo
   else
-    _build_gcc_standard
+    _build_gcc_standard_pass2
   fi
+  touch "${WORK_DIR}/.stamp_gcc_pass2"
 }
 
-_build_gcc_standard() {
-  log "Building GCC (standard, ${JOBS} jobs)..."
-  mkdir -p build-gcc && cd build-gcc
-  _configure_gcc "$PREFIX"
+_build_gcc_standard_pass2() {
+  header "BUILDING GCC PASS 2 (FINAL)"
+  _configure_gcc_pass2 "build-gcc-pass2"
 
-  make all-gcc             -j"$JOBS" > "${WORK_DIR}/build-gcc.log"
-  make all-target-libgcc   -j"$JOBS" >> "${WORK_DIR}/build-gcc.log"
-  make install-gcc         -j"$JOBS" > /dev/null
-  make install-target-libgcc -j"$JOBS" > /dev/null
+  make all
+  make install
+
   cd "${WORK_DIR}"
-  ok "GCC built and installed  [$(elapsed)]"
+  ok "GCC Pass 2 built and installed  [$(elapsed)]"
 }
 
 # ── PGO bootstrap ─────────────────────────────────────────────────
-# Stage 1: build an instrumented GCC
-# Stage 2: compile a real workload through it to gather profiles
-# Stage 3: rebuild GCC using those profiles — the result is 5-15 %
-#           faster at compile time than a vanilla -O3 build.
 _build_gcc_pgo() {
-  log "PGO bootstrap — Stage 1: instrumented build..."
+  header "PGO BOOTSTRAP - STAGE 1: INSTRUMENTED BUILD"
   local STAGE1_PREFIX="${WORK_DIR}/gcc-pgo-stage1"
-  mkdir -p build-gcc && cd build-gcc
 
-  # Override OPT_FLAGS temporarily: add profiling instrumentation
-  env CFLAGS="${OPT_FLAGS} -fprofile-generate=${WORK_DIR}/pgo-profiles" \
-      CXXFLAGS="${OPT_FLAGS} -fprofile-generate=${WORK_DIR}/pgo-profiles" \
-      LDFLAGS="-static" \
-    ../gcc/configure \
-      --target="$TARGET" \
-      --prefix="${STAGE1_PREFIX}" \
-      --with-arch="${TARGET_ARCH}" \
-      --with-tune="${TARGET_TUNE}" \
-      ${EXTRA_GCC_FLAGS} \
-      --enable-languages=c,c++ \
-      --enable-threads=posix \
-      --enable-lto \
-      --with-newlib \
-      --with-sysroot \
-      --with-gnu-as \
-      --with-gnu-ld \
-      --with-linker-hash-style=gnu \
-      --disable-docs \
-      --disable-nls \
-      --disable-shared \
-      --disable-multilib \
-      --disable-werror \
-      2>&1 | tee "${WORK_DIR}/configure-gcc-pgo1.log"
+  _configure_gcc_pass2 "build-gcc-pgo1" "-fprofile-generate=${WORK_DIR}/pgo-profiles"
 
-  make all-gcc -j"$JOBS" > "${WORK_DIR}/build-gcc-pgo1.log"
-  make install-gcc -j"$JOBS" > /dev/null
+  sed -i "s|^prefix =.*|prefix = ${STAGE1_PREFIX}|g" Makefile
+
+  make all-gcc > "${WORK_DIR}/build-gcc-pgo1.log"
+  make install-gcc
   ok "Stage 1 done  [$(elapsed)]"
 
-  # ── Stage 2: training run ──────────────────────────────────────
-  log "PGO bootstrap — Stage 2: training run (compiling GCC itself)..."
+  header "PGO BOOTSTRAP - STAGE 2: TRAINING RUN"
   mkdir -p "${WORK_DIR}/pgo-profiles"
-  # Re-compile the GCC source tree with the instrumented compiler to
-  # exercise realistic code paths (parsing, RTL, scheduling, RA, LTO).
-  make -C "${WORK_DIR}/build-gcc" \
-    CC="${STAGE1_PREFIX}/bin/${TARGET}-gcc" \
-    CXX="${STAGE1_PREFIX}/bin/${TARGET}-g++" \
-    all-gcc -j"$JOBS" > "${WORK_DIR}/build-gcc-pgo-train.log" 2>&1 || true   # failures OK — we just want profiles
+  make -C "${WORK_DIR}/build-gcc-pgo1"     CC="${STAGE1_PREFIX}/bin/${TARGET}-gcc"     CXX="${STAGE1_PREFIX}/bin/${TARGET}-g++"     all-gcc > "${WORK_DIR}/build-gcc-pgo-train.log" 2>&1 || true
   ok "Training run complete  [$(elapsed)]"
 
-  # ── Stage 3: optimised build ───────────────────────────────────
-  log "PGO bootstrap — Stage 3: final optimised build..."
-  cd "${WORK_DIR}"
-  rm -rf build-gcc && mkdir build-gcc && cd build-gcc
+  header "PGO BOOTSTRAP - STAGE 3: FINAL OPTIMISED BUILD"
+  _configure_gcc_pass2 "build-gcc-pgo3" "-fprofile-use=${WORK_DIR}/pgo-profiles -fprofile-correction"
 
-  env CFLAGS="${OPT_FLAGS} -fprofile-use=${WORK_DIR}/pgo-profiles -fprofile-correction" \
-      CXXFLAGS="${OPT_FLAGS} -fprofile-use=${WORK_DIR}/pgo-profiles -fprofile-correction" \
-      LDFLAGS="-static" \
-    ../gcc/configure \
-      --target="$TARGET" \
-      --prefix="$PREFIX" \
-      --with-arch="${TARGET_ARCH}" \
-      --with-tune="${TARGET_TUNE}" \
-      ${EXTRA_GCC_FLAGS} \
-      --enable-languages=c,c++ \
-      --enable-threads=posix \
-      --enable-default-ssp \
-      --enable-default-pie \
-      --enable-linker-build-id \
-      --enable-lto \
-      --enable-plugins \
-      --with-gnu-as \
-      --with-gnu-ld \
-      --with-linker-hash-style=gnu \
-      --with-headers="/usr/include" \
-      --with-newlib \
-      --with-sysroot \
-      --disable-decimal-float \
-      --disable-docs \
-      --disable-gcov \
-      --disable-libffi \
-      --disable-libgomp \
-      --disable-libmudflap \
-      --disable-libquadmath \
-      --disable-libsanitizer \
-      --disable-libstdcxx-pch \
-      --disable-multilib \
-      --disable-nls \
-      --disable-shared \
-      --disable-werror \
-      2>&1 | tee "${WORK_DIR}/configure-gcc-pgo3.log"
-
-  make all-gcc             -j"$JOBS" > "${WORK_DIR}/build-gcc-pgo3.log"
-  make all-target-libgcc   -j"$JOBS" >> "${WORK_DIR}/build-gcc-pgo3.log"
-  make install-gcc         -j"$JOBS" > /dev/null
-  make install-target-libgcc -j"$JOBS" > /dev/null
+  make all > "${WORK_DIR}/build-gcc-pgo3.log"
+  make install
   cd "${WORK_DIR}"
   ok "PGO GCC built and installed  [$(elapsed)]"
 }
@@ -399,17 +502,26 @@ print_summary() {
   echo -e "${BOLD}╔══════════════════════════════════════════════════════════╗${RESET}"
   echo -e "${BOLD}║                     Build Summary                       ║${RESET}"
   echo -e "${BOLD}╠══════════════════════════════════════════════════════════╣${RESET}"
-  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Target triple:"  "$TARGET"
-  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Architecture:"   "$TARGET_ARCH"
-  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Tune for:"       "$TARGET_TUNE "
-  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Extra Flags:"            "${EXTRA_GCC_FLAGS}"
-  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "PGO:"            "$ENABLE_PGO"
-  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Installed to:"   "$PREFIX"
-  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Total time:"     "$(elapsed)"
+  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}
+" "Target triple:"  "$TARGET"
+  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}
+" "Architecture:"   "$TARGET_ARCH"
+  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}
+" "Tune for:"       "$TARGET_TUNE "
+  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}
+" "Extra Flags:"            "${EXTRA_GCC_FLAGS}"
+  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}
+" "PGO:"            "$ENABLE_PGO"
+  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}
+" "Installed to:"   "$PREFIX"
+  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}
+" "Sysroot:"        "$SYSROOT"
+  printf  "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}
+" "Total time:"     "$(elapsed)"
   echo -e "${BOLD}╚══════════════════════════════════════════════════════════╝${RESET}"
   echo ""
   log "Add the toolchain to your PATH:"
-  echo "    export PATH=\"${PREFIX}/bin:\$PATH\""
+  echo "    export PATH="${PREFIX}/bin:\$PATH""
   echo ""
   log "Verify installation:"
   echo "    ${PREFIX}/bin/${TARGET}-gcc --version"
@@ -418,8 +530,10 @@ print_summary() {
 
 # ── Entry point ───────────────────────────────────────────────────
 check_deps
-clean_previous
 download_resources
 build_binutils
-build_gcc
+build_linux_headers
+build_gcc_pass1
+build_glibc
+build_gcc_pass2
 print_summary
