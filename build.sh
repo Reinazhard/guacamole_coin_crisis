@@ -44,6 +44,22 @@ echo "║                                                          ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo -e "${RESET}"
 
+# ── Flag Configuration ──────────────────────────────────────────────
+# Build flags: For tools running on the build machine (e.g. generator tools).
+# We keep these conservative to ensure host tools build correctly.
+BUILD_CFLAGS="-O2 -pipe"
+BUILD_CXXFLAGS="-O2 -pipe"
+
+# Host flags: For the cross-compiler tools (binutils, gcc) running on the host machine.
+# Avoid -march=native and aggressive LTO for bootstrap stability.
+HOST_CFLAGS="-O2 -pipe"
+HOST_CXXFLAGS="-O2 -pipe"
+
+# Target base flags: For target libraries (libgcc, glibc) running on the target device.
+# These will be augmented by architecture-specific flags in the target resolution step.
+TARGET_BASE_CFLAGS="-O2 -pipe -fstack-protector-strong -ffunction-sections -fdata-sections"
+TARGET_BASE_CXXFLAGS="-O2 -pipe -fstack-protector-strong -ffunction-sections -fdata-sections"
+
 # ── Argument parsing ──────────────────────────────────────────────
 ENABLE_PGO=false
 
@@ -82,6 +98,8 @@ case "${arch}" in
     EXTRA_GCC_FLAGS="--with-fpu=neon-fp-armv8 --with-float=hard"
     TARGET_ARCH="armv8.2-a"
     TARGET_TUNE="cortex-a55"
+    TARGET_CFLAGS="${TARGET_BASE_CFLAGS} -march=${TARGET_ARCH} -mtune=${TARGET_TUNE} -mfloat-abi=hard -mfpu=neon-fp-armv8"
+    TARGET_CXXFLAGS="${TARGET_BASE_CXXFLAGS} -march=${TARGET_ARCH} -mtune=${TARGET_TUNE} -mfloat-abi=hard -mfpu=neon-fp-armv8"
     ;;
   "arm64")
     TARGET="aarch64-linux-gnu"
@@ -89,6 +107,8 @@ case "${arch}" in
     EXTRA_GCC_FLAGS="--with-abi=lp64 --enable-fix-cortex-a53-835769 --enable-fix-cortex-a53-843419"
     TARGET_ARCH="armv8.2-a+crypto+dotprod+fp16+rcpc+ssbs+sb"
     TARGET_TUNE="cortex-a76.cortex-a55"
+    TARGET_CFLAGS="${TARGET_BASE_CFLAGS} -march=${TARGET_ARCH} -mtune=${TARGET_TUNE}"
+    TARGET_CXXFLAGS="${TARGET_BASE_CXXFLAGS} -march=${TARGET_ARCH} -mtune=${TARGET_TUNE}"
     ;;
   "x86")
     TARGET="x86_64-linux-gnu"
@@ -96,6 +116,8 @@ case "${arch}" in
     EXTRA_GCC_FLAGS=""
     TARGET_ARCH="x86-64-v3"
     TARGET_TUNE="skylake"
+    TARGET_CFLAGS="${TARGET_BASE_CFLAGS} -march=${TARGET_ARCH} -mtune=${TARGET_TUNE}"
+    TARGET_CXXFLAGS="${TARGET_BASE_CXXFLAGS} -march=${TARGET_ARCH} -mtune=${TARGET_TUNE}"
     ;;
   *)
     die "Unknown arch '${arch}'. Valid: arm | arm64 | x86"
@@ -112,25 +134,6 @@ export PATH="$PREFIX/bin:/usr/bin/core_perl:$PATH"
 JOBS=$(nproc --all)
 export MAKEFLAGS="-j${JOBS}"
 log "Detected ${JOBS} logical CPUs → using ${JOBS} parallel jobs"
-
-# ── Host compiler optimisation flags ─────────────────────────────
-HOST_OPT_FLAGS=(
-  "-g0"
-  "-O3"
-  "-march=native"
-  "-mtune=native"
-  "-pipe"
-  "-fomit-frame-pointer"
-  "-fstack-protector-strong"
-  "-ffunction-sections"
-  "-fdata-sections"
-  "-flto=auto"
-  "-ffat-lto-objects"
-  "-flto-compression-level=6"
-  "-fuse-linker-plugin"
-)
-OPT_FLAGS="${HOST_OPT_FLAGS[*]}"
-export OPT_FLAGS
 
 # ─────────────────────────────────────────────────────────────────
 log "Work dir : ${WORK_DIR}"
@@ -256,8 +259,8 @@ build_binutils() {
       --disable-nls \
       --disable-sim \
       --disable-werror \
-      CFLAGS="$OPT_FLAGS" \
-      CXXFLAGS="$OPT_FLAGS" \
+      CFLAGS="${HOST_CFLAGS}" \
+      CXXFLAGS="${HOST_CXXFLAGS}" \
       LDFLAGS="-static" \
       2>&1 | tee "${WORK_DIR}/configure-binutils.log"
 
@@ -323,10 +326,12 @@ _configure_gcc_pass1() {
       --disable-multilib \
       --disable-nls \
       --disable-werror \
-      CFLAGS="${OPT_FLAGS}" \
-      CXXFLAGS="${OPT_FLAGS}" \
-      CFLAGS_FOR_TARGET="-O2 -g " \
-      CXXFLAGS_FOR_TARGET="-O2 -g " \
+      CFLAGS="${HOST_CFLAGS}" \
+      CXXFLAGS="${HOST_CXXFLAGS}" \
+      CFLAGS_FOR_TARGET="${TARGET_CFLAGS}" \
+      CXXFLAGS_FOR_TARGET="${TARGET_CXXFLAGS}" \
+      CFLAGS_FOR_BUILD="${BUILD_CFLAGS}" \
+      CXXFLAGS_FOR_BUILD="${BUILD_CXXFLAGS}" \
       LDFLAGS="-static" \
       ${extra_opts} \
       2>&1 | tee "${WORK_DIR}/configure-gcc-pass1.log"
@@ -373,8 +378,8 @@ build_glibc() {
       with_selinux=no \
       CC="${TARGET}-gcc" \
       CXX="${TARGET}-g++" \
-      CFLAGS="-g0 -O3 -fstack-protector-strong -ffunction-sections -fdata-sections" \
-      CXXFLAGS="-g0 -O3 -fstack-protector-strong -ffunction-sections -fdata-sections" \
+      CFLAGS="${TARGET_CFLAGS}" \
+      CXXFLAGS="${TARGET_CXXFLAGS}" \
       2>&1 | tee "${WORK_DIR}/configure-glibc.log"
 
   log "Building glibc bootstrap headers & dummy libc..."
@@ -437,10 +442,12 @@ _configure_gcc_pass2() {
       --disable-multilib \
       --disable-nls \
       --disable-werror \
-      CFLAGS="${OPT_FLAGS} ${extra_cflags}" \
-      CXXFLAGS="${OPT_FLAGS} ${extra_cflags}" \
-      CFLAGS_FOR_TARGET="-g0 -O3 -fstack-protector-strong" \
-      CXXFLAGS_FOR_TARGET="-g0 -O3 -fstack-protector-strong" \
+      CFLAGS="${HOST_CFLAGS} ${extra_cflags}" \
+      CXXFLAGS="${HOST_CXXFLAGS} ${extra_cflags}" \
+      CFLAGS_FOR_TARGET="${TARGET_CFLAGS}" \
+      CXXFLAGS_FOR_TARGET="${TARGET_CXXFLAGS}" \
+      CFLAGS_FOR_BUILD="${BUILD_CFLAGS}" \
+      CXXFLAGS_FOR_BUILD="${BUILD_CXXFLAGS}" \
       LDFLAGS="-static" \
       2>&1 | tee "${WORK_DIR}/configure-gcc-pass2.log"
 }
