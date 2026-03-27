@@ -62,8 +62,8 @@ ISL_VER="0.26"
 BUILD_CFLAGS="-O2 -pipe"
 BUILD_CXXFLAGS="-O2 -pipe"
 
-HOST_CFLAGS="-O3 -pipe -g -gsplit-dwarf -fno-plt"
-HOST_CXXFLAGS="-O3 -pipe -g -gsplit-dwarf -fno-plt"
+HOST_CFLAGS="-O3 -pipe -fno-plt"
+HOST_CXXFLAGS="-O3 -pipe -fno-plt"
 
 TARGET_CFLAGS="-O2 -pipe -fstack-protector-strong -ffunction-sections -fdata-sections"
 TARGET_CXXFLAGS="-O2 -pipe -fstack-protector-strong -ffunction-sections -fdata-sections"
@@ -612,5 +612,4 @@ build_linux_headers
 build_gcc_pass1
 build_glibc
 build_gcc_pass2
-package_artifact
 print_summary

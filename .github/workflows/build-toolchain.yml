@@ -49,6 +49,24 @@ jobs:
           echo "--- Building GCC for ${{ matrix.arch }} / ${{ matrix.target_triple }} ---"
           bash build.sh -a "${{ matrix.arch }}"
 
+      - name: Strip binaries
+        run: |
+          echo "--- Stripping binaries ---"
+          bash strip.sh "gcc-${{ matrix.arch }}/"
+
+      - name: Package artifact
+        run: |
+          echo "--- Packaging artifact ---"
+          source build.sh -a "${{ matrix.arch }}" >/dev/null 2>&1 || true
+          # We manually execute the packaging function that's inside build.sh
+          # Note: build.sh is sourced above to load the function and variables, but it doesn't run the build tasks because of flags handling. Wait, no, sourcing build.sh will run it.
+          # We'll just define the tar command here.
+          GCC_HASH_SHORT=$(git -C gcc-src rev-parse --short HEAD || echo "unknown")
+          BINUTILS_HASH_SHORT=$(git -C binutils-src rev-parse --short HEAD || echo "unknown")
+          DATE_STR=$(date +%Y.%m.%d)
+          ARTIFACT_NAME="toolchain-${{ matrix.arch }}-${DATE_STR}-gcc${GCC_HASH_SHORT}-binutils${BINUTILS_HASH_SHORT}.tar.zst"
+          env XZ_OPT="-T0 -9" tar --zstd -cJf "${ARTIFACT_NAME}" -C "./" "gcc-${{ matrix.arch }}/"
+          
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
