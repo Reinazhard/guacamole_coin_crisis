@@ -39,7 +39,7 @@ elapsed() {
 # ── Banner ────────────────────────────────────────────────────────
 echo -e "${BOLD}"
 echo "╔══════════════════════════════════════════════════════════╗"
-echo "║      Bleeding-Edge GCC — Optimized Cross-Compiler       ║"
+echo "║           GCC Cross-Compiler Build System               ║"
 echo "║                                                          ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo -e "${RESET}"
@@ -303,7 +303,6 @@ _configure_gcc_pass1() {
       --with-native-system-header-dir="/usr/include" \
       --with-arch="${TARGET_ARCH}" \
       --with-tune="${TARGET_TUNE}" \
-      --with-pkgversion="Bleeding-Edge GCC" \
       ${EXTRA_GCC_FLAGS} \
       --with-glibc-version="${GLIBC_VER}" \
       --enable-languages=c,c++ \
@@ -417,7 +416,6 @@ _configure_gcc_pass2() {
       --with-native-system-header-dir="/usr/include" \
       --with-arch="${TARGET_ARCH}" \
       --with-tune="${TARGET_TUNE}" \
-      --with-pkgversion="Bleeding-Edge GCC" \
       ${EXTRA_GCC_FLAGS} \
       --with-glibc-version="${GLIBC_VER}" \
       --enable-languages=c,c++ \
