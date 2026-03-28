@@ -10,7 +10,7 @@ on:
     branches:
       - '**'
   schedule:
-    - cron: '0 0 * * 0' # Matches the schedule pipeline trigger
+    - cron: '0 0 1 * *' # Matches the schedule pipeline trigger
   workflow_dispatch:
 
 env:
