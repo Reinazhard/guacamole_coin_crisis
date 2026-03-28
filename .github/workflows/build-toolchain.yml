@@ -55,18 +55,19 @@ jobs:
           bash strip.sh "gcc-${{ matrix.arch }}/"
 
       - name: Package artifact
+        id: package
         run: |
           echo "--- Packaging artifact ---"
           GCC_HASH_SHORT=$(git -C gcc-src rev-parse --short HEAD || echo "unknown")
           BINUTILS_HASH_SHORT=$(git -C binutils-src rev-parse --short HEAD || echo "unknown")
           DATE_STR=$(date +%Y.%m.%d)
           ARTIFACT_NAME="toolchain-${{ matrix.arch }}-${DATE_STR}-gcc${GCC_HASH_SHORT}-binutils${BINUTILS_HASH_SHORT}"
-          echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_ENV"
+          echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
           tar --zstd -cf "${ARTIFACT_NAME}.tar.zst" -C "./" "gcc-${{ matrix.arch }}/"
           
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.artifact_name }}
+          name: ${{ steps.package.outputs.artifact_name }}
           path: "*.tar.zst"
           retention-days: 30
