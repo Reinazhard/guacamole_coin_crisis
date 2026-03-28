@@ -64,7 +64,11 @@ jobs:
         run: bash build.sh -a "${{ matrix.arch }}" build_gcc_pass2
 
       - name: Print Summary
-        run: bash build.sh -a "${{ matrix.arch }}" print_summary
+        run: |
+          bash build.sh -a "${{ matrix.arch }}" print_summary | tee summary_raw.txt
+          echo '```text' > release_notes.txt
+          sed 's/\x1b\[[0-9;]*m//g' summary_raw.txt >> release_notes.txt
+          echo '```' >> release_notes.txt
 
       - name: Strip binaries
         run: |
@@ -96,4 +100,6 @@ jobs:
         with:
           tag_name: ${{ steps.package.outputs.tag_name }}
           name: Toolchain Release ${{ steps.package.outputs.tag_name }}
+          body_path: release_notes.txt
+          append_body: true
           files: "*.tar.zst"
