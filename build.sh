@@ -74,9 +74,10 @@ TARGET_CXXFLAGS="-O2 -pipe -fstack-protector-strong -ffunction-sections -fdata-s
 ENABLE_PGO=false
 
 usage() {
-  echo "Usage: $0 -a <arch> [-p]"
+  echo "Usage: $0 -a <arch> [-p] [stage...]"
   echo "  -a  Target architecture: arm64 | arm"
   echo "  -p  Enable PGO (Profile-Guided Optimisation) for the compiler host binary"
+  echo "  stage... Optional specific stages to run (e.g., build_binutils)"
   exit 1
 }
 
@@ -87,6 +88,7 @@ while getopts "a:p" flag; do
     *) usage ;;
   esac
 done
+shift $((OPTIND-1))
 
 [[ -z "${ARCH:-}" ]] && usage
 
@@ -589,11 +591,24 @@ print_summary() {
 # ─────────────────────────────────────────────────────────────────
 # ENTRY POINT
 # ─────────────────────────────────────────────────────────────────
-check_deps
-download_resources
-build_binutils
-build_linux_headers
-build_gcc_pass1
-build_glibc
-build_gcc_pass2
-print_summary
+STAGES=("${@:-all}")
+
+if [[ "${STAGES[0]}" == "all" ]]; then
+  check_deps
+  download_resources
+  build_binutils
+  build_linux_headers
+  build_gcc_pass1
+  build_glibc
+  build_gcc_pass2
+  print_summary
+else
+  check_deps
+  for stage in "${STAGES[@]}"; do
+    if declare -f "$stage" > /dev/null; then
+      $stage
+    else
+      die "Unknown stage: $stage"
+    fi
+  done
+fi
