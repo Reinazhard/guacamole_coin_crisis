@@ -52,14 +52,14 @@ fi
 
 if [[ -n "$A64S" && -x "$A64S" ]]; then
         log "Stripping aarch64 binaries using ${A64S}..."
-        grep "ARM" "$IDX" | grep "aarch64" | grep "not strip" | grep -v "relocatable" | process_lines "$A64S" || true
+        grep -i "ELF.*aarch64\|aarch64.*ELF" "$IDX" | grep "not strip" | grep -v "relocatable" | process_lines "$A64S" || true
 else
         warn "Stripper for aarch64 not found. Skipping."
 fi
 
 if [[ -n "$A32S" && -x "$A32S" ]]; then
         log "Stripping arm32 binaries using ${A32S}..."
-        grep "ARM" "$IDX" | grep -E "32[-.]bit" | grep "not strip" | grep -v "relocatable" | process_lines "$A32S" || true
+        grep -i "ELF 32-bit.*ARM\|ARM.*ELF 32-bit" "$IDX" | grep "not strip" | grep -v "relocatable" | process_lines "$A32S" || true
 else
         warn "Stripper for arm32 not found. Skipping."
 fi
