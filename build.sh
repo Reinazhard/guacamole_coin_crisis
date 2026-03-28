@@ -312,6 +312,7 @@ build_binutils() {
       --enable-deterministic-archives \
       --disable-nls \
       --disable-werror \
+      --enable-kernel="${LINUX_VER}" \
       --disable-docs \
       CFLAGS="${HOST_CFLAGS}" \
       CXXFLAGS="${HOST_CXXFLAGS}" \
@@ -389,6 +390,7 @@ _configure_gcc() {
       --disable-multilib \
       --disable-nls \
       --disable-werror \
+      --enable-kernel="${LINUX_VER}" \
       --disable-docs \
       CFLAGS="${HOST_CFLAGS}" \
       CXXFLAGS="${HOST_CXXFLAGS}" \
@@ -454,6 +456,7 @@ build_glibc() {
       --with-headers="${SYSROOT}/usr/include" \
       --disable-multilib \
       --disable-werror \
+      --enable-kernel="${LINUX_VER}" \
       libc_cv_forced_unwind=yes \
       --disable-selinux \
       CC="${TARGET}-gcc" \
