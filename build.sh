@@ -40,6 +40,8 @@ BINUTILS_BRANCH="binutils-2_46-branch"
 
 GCC_COMMIT="61f6c04150e59fc9"
 BINUTILS_COMMIT="a9f0052b9dc75eff"
+# For shallow cloning
+SHALLOW_SINCE="2026-03-01"
 
 GLIBC_VER="2.43"
 LINUX_VER="6.19"
@@ -207,9 +209,8 @@ download_resources() {
     log "Cloning GCC from ${GCC_BRANCH}..."
     if [[ -n "${GCC_COMMIT}" ]]; then
       log "Pinning GCC to commit: ${GCC_COMMIT}"
-      git clone --branch="${GCC_BRANCH}" https://gnu.googlesource.com/gcc gcc-src
-      git -C gcc-src fetch origin "${GCC_COMMIT}"
-      git -C gcc-src checkout FETCH_HEAD
+      git clone --shallow-since="${SHALLOW_SINCE}" --branch="${GCC_BRANCH}" https://gnu.googlesource.com/gcc gcc-src
+      git -C gcc-src checkout "${GCC_COMMIT}"
     else
       git clone --depth=1 --branch="${GCC_BRANCH}" https://gnu.googlesource.com/gcc gcc-src
     fi
@@ -219,9 +220,8 @@ download_resources() {
     log "Cloning Binutils from ${BINUTILS_BRANCH}..."
     if [[ -n "${BINUTILS_COMMIT}" ]]; then
       log "Pinning Binutils to commit: ${BINUTILS_COMMIT}"
-      git clone --branch="${BINUTILS_BRANCH}" https://gnu.googlesource.com/binutils-gdb binutils-src
-      git -C binutils-src fetch origin "${BINUTILS_COMMIT}"
-      git -C binutils-src checkout FETCH_HEAD
+      git clone --shallow-since="${SHALLOW_SINCE}" --branch="${BINUTILS_BRANCH}" https://gnu.googlesource.com/binutils-gdb binutils-src
+      git -C binutils-src checkout "${BINUTILS_COMMIT}"
     else
       git clone --depth=1 --branch="${BINUTILS_BRANCH}" https://gnu.googlesource.com/binutils-gdb binutils-src
     fi
