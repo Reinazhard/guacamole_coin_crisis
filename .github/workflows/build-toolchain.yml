@@ -44,10 +44,23 @@ jobs:
           pacman -Syu --noconfirm base-devel git bison flex texinfo gawk curl tar xz file ncurses python glibc automake autoconf pkgconf gettext rsync zstd cpio kmod bc patch libtool wget gmp mpfr libmpc isl zlib gperf expat openssl
           chmod +x build.sh
 
-      - name: Build GCC Toolchain
-        run: |
-          echo "--- Building GCC for ${{ matrix.arch }} / ${{ matrix.target_triple }} ---"
-          bash build.sh -a "${{ matrix.arch }}"
+      - name: Download & Extract Sources
+        run: bash build.sh -a "${{ matrix.arch }}" download_resources
+
+      - name: Build Stage 1 (Binutils)
+        run: bash build.sh -a "${{ matrix.arch }}" build_binutils
+
+      - name: Build Stage 2 (Linux Headers)
+        run: bash build.sh -a "${{ matrix.arch }}" build_linux_headers
+
+      - name: Build Stage 3 (GCC Pass 1)
+        run: bash build.sh -a "${{ matrix.arch }}" build_gcc_pass1
+
+      - name: Build Stage 4 (Glibc)
+        run: bash build.sh -a "${{ matrix.arch }}" build_glibc
+
+      - name: Build Stage 5 (GCC Pass 2)
+        run: bash build.sh -a "${{ matrix.arch }}" build_gcc_pass2
 
       - name: Strip binaries
         run: |
