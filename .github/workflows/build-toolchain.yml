@@ -42,7 +42,6 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm base-devel git bison flex texinfo gawk curl tar xz file ncurses python glibc automake autoconf pkgconf gettext rsync zstd cpio kmod bc patch libtool wget gmp mpfr libmpc isl zlib gperf expat openssl
-          chmod +x build.sh
 
       - name: Download & Extract Sources
         run: bash build.sh -a "${{ matrix.arch }}" download_resources
