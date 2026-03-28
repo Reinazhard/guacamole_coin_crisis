@@ -455,7 +455,7 @@ build_glibc() {
       --disable-multilib \
       --disable-werror \
       libc_cv_forced_unwind=yes \
-      with_selinux=no \
+      --disable-selinux \
       CC="${TARGET}-gcc" \
       CXX="${TARGET}-g++" \
       CFLAGS="${TARGET_CFLAGS}" \
