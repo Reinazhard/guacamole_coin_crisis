@@ -398,7 +398,7 @@ _configure_gcc() {
       CXXFLAGS_FOR_BUILD="${BUILD_CXXFLAGS}" \
       LDFLAGS="-static-libstdc++ -static-libgcc" \
       "$@" \
-      2>&1 | tee "${WORK_DIR}/log-gcc-configure.txt"
+      2>&1 | tee "${WORK_DIR}/log-gcc-${2}-configure.txt"
 }
 
 build_gcc_pass1() {
@@ -408,7 +408,7 @@ build_gcc_pass1() {
   cd "${WORK_DIR}"
   mkdir -p build-gcc-pass1 && cd build-gcc-pass1
 
-  _configure_gcc "gcc-src" \
+  _configure_gcc "gcc-src" "pass1" \
       --without-headers \
       --with-newlib \
       --disable-shared \
@@ -506,7 +506,7 @@ _build_gcc_pass2_standard() {
   cd "${WORK_DIR}"
   mkdir -p build-gcc-pass2 && cd build-gcc-pass2
 
-  _configure_gcc "gcc-src" \
+  _configure_gcc "gcc-src" "pass2" \
       --enable-shared \
       --enable-threads=posix \
       --enable-linker-build-id \
@@ -544,7 +544,7 @@ _build_gcc_pass2_pgo() {
   cd "${WORK_DIR}"
   mkdir -p build-gcc-pgo && cd build-gcc-pgo
 
-  _configure_gcc "gcc-src" \
+  _configure_gcc "gcc-src" "pass2-pgo" \
       --enable-shared \
       --enable-threads=posix \
       --enable-linker-build-id \
