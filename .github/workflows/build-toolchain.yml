@@ -12,6 +12,11 @@ on:
   schedule:
     - cron: '0 0 1 * *' # Matches the schedule pipeline trigger
   workflow_dispatch:
+    inputs:
+      enable_pgo:
+        description: 'Enable PGO (Profile-Guided Optimisation)'
+        type: boolean
+        default: false
 
 env:
   GCC_COMMIT: "61f6c04150e59fc9"
@@ -70,7 +75,10 @@ jobs:
         run: bash build.sh -a "${{ matrix.arch }}" build_glibc
 
       - name: Build Stage 5 (GCC Pass 2)
-        run: bash build.sh -a "${{ matrix.arch }}" build_gcc_pass2
+        run: |
+          PGO_FLAG=""
+          if [ "${{ inputs.enable_pgo }}" = "true" ]; then PGO_FLAG="-p"; fi
+          bash build.sh -a "${{ matrix.arch }}" $PGO_FLAG build_gcc_pass2
 
       - name: Print Summary
         run: |
