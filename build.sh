@@ -552,24 +552,6 @@ _build_gcc_pass2_pgo() {
 }
 
 # ─────────────────────────────────────────────────────────────────
-# PACKAGE ARTIFACT
-# ─────────────────────────────────────────────────────────────────
-package_artifact() {
-  header "STAGE 6: PACKAGING"
-  
-  local gcc_hash_short=$(git -C gcc-src rev-parse --short HEAD)
-  local binutils_hash_short=$(git -C binutils-src rev-parse --short HEAD)
-  local date_str=$(date +%Y.%m.%d)
-  
-  export ARTIFACT_NAME="toolchain-${ARCH}-${date_str}-gcc${gcc_hash_short}-binutils${binutils_hash_short}.tar.zst"
-  
-  log "Creating artifact: ${ARTIFACT_NAME}"
-  tar --zstd -cf "${ARTIFACT_NAME}" -C "${WORK_DIR}" "$(basename "${PREFIX}")"
-  
-  ok "Packaging done  [$(elapsed)]"
-}
-
-# ─────────────────────────────────────────────────────────────────
 # SUMMARY
 # ─────────────────────────────────────────────────────────────────
 print_summary() {
@@ -590,7 +572,6 @@ print_summary() {
   printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "GCC commit:"     "${gcc_hash_short} (${gcc_hash_full:0:16}...)"
   printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Binutils branch:" "${BINUTILS_BRANCH}"
   printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Binutils commit:" "${binutils_hash_short} (${binutils_hash_full:0:16}...)"
-  printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Artifact:"       "${ARTIFACT_NAME}"
   printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "PGO:"            "${ENABLE_PGO}"
   printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Total time:"     "$(elapsed)"
   echo -e "${BOLD}╚══════════════════════════════════════════════════════════╝${RESET}"
