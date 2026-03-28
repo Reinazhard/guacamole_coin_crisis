@@ -14,8 +14,6 @@ on:
   workflow_dispatch:
 
 env:
-  BINUTILS_BRANCH: "binutils-2_46-branch"
-  GCC_BRANCH: "releases/gcc-15"
 
 jobs:
   build-toolchain:
