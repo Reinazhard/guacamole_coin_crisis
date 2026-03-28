@@ -98,5 +98,6 @@ jobs:
         with:
           tag_name: ${{ steps.package.outputs.tag_name }}
           name: Toolchain Release ${{ steps.package.outputs.tag_name }}
-          body_path: release_notes.txt
+          body_path: ${{ matrix.arch == 'arm64' && 'release_notes.txt' || '' }}
+          append_body: ${{ matrix.arch != 'arm64' }}
           files: "*.tar.zst"
