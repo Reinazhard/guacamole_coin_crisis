@@ -79,7 +79,7 @@ jobs:
           echo "--- Packaging artifact ---"
           GCC_HASH_SHORT=$(git -C gcc-src rev-parse --short HEAD || echo "unknown")
           BINUTILS_HASH_SHORT=$(git -C binutils-src rev-parse --short HEAD || echo "unknown")
-          DATE_STR=$(date +%Y.%m.%d)
+          DATE_STR=$(date +%Y.%m.%d)-${GITHUB_RUN_ID}
           ARTIFACT_NAME="toolchain-${{ matrix.arch }}-${DATE_STR}-gcc${GCC_HASH_SHORT}-binutils${BINUTILS_HASH_SHORT}"
           echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
           echo "tag_name=${DATE_STR}" >> "$GITHUB_OUTPUT"
