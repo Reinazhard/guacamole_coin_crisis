@@ -38,8 +38,8 @@ elapsed() {
 GCC_BRANCH="releases/gcc-15"
 BINUTILS_BRANCH="binutils-2_46-branch"
 
-GCC_COMMIT=""
-BINUTILS_COMMIT=""
+GCC_COMMIT="61f6c04150e59fc9"
+BINUTILS_COMMIT="a9f0052b9dc75eff"
 
 GLIBC_VER="2.43"
 LINUX_VER="6.19"
