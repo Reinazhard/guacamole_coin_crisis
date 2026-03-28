@@ -585,7 +585,6 @@ print_summary() {
   echo "    ${PREFIX}/bin/${TARGET}-gcc --version"
   echo "    ${PREFIX}/bin/${TARGET}-gcc -Q --help=target | grep march"
   echo
-  log "To use for kernel builds, see: kernel-build.sh"
 }
 
 # ─────────────────────────────────────────────────────────────────

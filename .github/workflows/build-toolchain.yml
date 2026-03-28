@@ -61,6 +61,9 @@ jobs:
       - name: Build Stage 5 (GCC Pass 2)
         run: bash build.sh -a "${{ matrix.arch }}" build_gcc_pass2
 
+      - name: Print Summary
+        run: bash build.sh -a "${{ matrix.arch }}" print_summary
+
       - name: Strip binaries
         run: |
           echo "--- Stripping binaries ---"
