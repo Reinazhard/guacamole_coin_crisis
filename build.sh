@@ -375,6 +375,9 @@ _configure_gcc() {
       --disable-libmudflap \
       --disable-libsanitizer \
       --disable-libssp \
+      --disable-libgomp \
+      --disable-libitm \
+      --disable-vtable-verify \
       --disable-multilib \
       --disable-nls \
       --disable-werror \
