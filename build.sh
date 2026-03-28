@@ -562,13 +562,13 @@ _build_gcc_pass2_pgo() {
 print_summary() {
   local gcc_hash_full=$(git -C gcc-src rev-parse HEAD)
   local gcc_hash_short=$(git -C gcc-src rev-parse --short HEAD)
-  
+
   local binutils_hash_full=$(git -C binutils-src rev-parse HEAD)
   local binutils_hash_short=$(git -C binutils-src rev-parse --short HEAD)
-  
+
   echo
   echo -e "${BOLD}╔══════════════════════════════════════════════════════════╗"
-  echo -e "║                    Toolchain Summary                    ║"
+  echo -e "║                    Toolchain Summary                     ║"
   echo -e "╠══════════════════════════════════════════════════════════╣${RESET}"
   printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Target triple:"  "${TARGET}"
   printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Installed to:"   "${PREFIX}"
@@ -582,8 +582,10 @@ print_summary() {
   echo -e "${BOLD}╚══════════════════════════════════════════════════════════╝${RESET}"
   echo
   log "Verify the toolchain:"
-  echo "    ${PREFIX}/bin/${TARGET}-gcc --version"
+  echo "${PREFIX}/bin/${TARGET}-gcc --version"
+  ./${PREFIX}/bin/${TARGET}-gcc --version
   echo "    ${PREFIX}/bin/${TARGET}-gcc -Q --help=target | grep march"
+  ./${PREFIX}/bin/${TARGET}-gcc -Q --help=target | grep march
   echo
 }
 
