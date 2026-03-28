@@ -160,14 +160,16 @@ JOBS=$(nproc --all)
 export MAKEFLAGS="-j${JOBS}"
 
 # ─────────────────────────────────────────────────────────────────
-log "Build machine : ${BUILD_TRIPLE}"
-log "Host machine  : ${BUILD_TRIPLE}  (same — standard cross-build)"
-log "Target triple : ${TARGET}"
-log "Prefix        : ${PREFIX}"
-log "Sysroot       : ${SYSROOT}"
-log "Parallel jobs : ${JOBS}"
-log "PGO           : ${ENABLE_PGO}"
-echo
+if [[ "${STAGES[*]}" != "print_summary" ]]; then
+  log "Build machine : ${BUILD_TRIPLE}"
+  log "Host machine  : ${BUILD_TRIPLE}  (same — standard cross-build)"
+  log "Target triple : ${TARGET}"
+  log "Prefix        : ${PREFIX}"
+  log "Sysroot       : ${SYSROOT}"
+  log "Parallel jobs : ${JOBS}"
+  log "PGO           : ${ENABLE_PGO}"
+  echo
+fi
 
 # ─────────────────────────────────────────────────────────────────
 # DEPENDENCY CHECK
@@ -585,9 +587,10 @@ print_summary() {
   printf "${BOLD}║${RESET}  %-20s %-35s ${BOLD}║${RESET}\n" "Total time:"     "$(elapsed)"
   echo -e "${BOLD}╚══════════════════════════════════════════════════════════╝${RESET}"
   echo
-  log "Verify the toolchain:"
-  "${PREFIX}/bin/${TARGET}-gcc" --version
-  "${PREFIX}/bin/${TARGET}-gcc" -Q --help=target | grep march
+  if [[ -x "${PREFIX}/bin/${TARGET}-gcc" ]]; then
+    log "Verify the toolchain:"
+    "${PREFIX}/bin/${TARGET}-gcc" --version | head -n 1
+  fi
   echo
 }
 

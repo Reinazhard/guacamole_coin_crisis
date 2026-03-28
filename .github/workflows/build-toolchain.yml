@@ -101,5 +101,4 @@ jobs:
           tag_name: ${{ steps.package.outputs.tag_name }}
           name: Toolchain Release ${{ steps.package.outputs.tag_name }}
           body_path: release_notes.txt
-          append_body: true
           files: "*.tar.zst"
