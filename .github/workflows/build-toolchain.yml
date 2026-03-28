@@ -21,6 +21,8 @@ jobs:
   build-toolchain:
     name: Build ${{ matrix.arch }} (${{ matrix.target_triple }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     container:
       image: archlinux:base-devel
     timeout-minutes: 360 # 6 hours timeout
@@ -78,6 +80,7 @@ jobs:
           DATE_STR=$(date +%Y.%m.%d)
           ARTIFACT_NAME="toolchain-${{ matrix.arch }}-${DATE_STR}-gcc${GCC_HASH_SHORT}-binutils${BINUTILS_HASH_SHORT}"
           echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
+          echo "tag_name=${DATE_STR}" >> "$GITHUB_OUTPUT"
           tar --zstd -cf "${ARTIFACT_NAME}.tar.zst" -C "./" "gcc-${{ matrix.arch }}/"
           
       - name: Upload Artifact
@@ -86,3 +89,11 @@ jobs:
           name: ${{ steps.package.outputs.artifact_name }}
           path: "*.tar.zst"
           retention-days: 30
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.event_name != 'pull_request'
+        with:
+          tag_name: ${{ steps.package.outputs.tag_name }}
+          name: Toolchain Release ${{ steps.package.outputs.tag_name }}
+          files: "*.tar.zst"
