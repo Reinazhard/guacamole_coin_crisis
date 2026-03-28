@@ -205,21 +205,25 @@ download_resources() {
   # Git Sources
   if [[ ! -d "gcc-src" ]]; then
     log "Cloning GCC from ${GCC_BRANCH}..."
-    git clone --depth=1 --branch="${GCC_BRANCH}" https://gnu.googlesource.com/gcc gcc-src
     if [[ -n "${GCC_COMMIT}" ]]; then
       log "Pinning GCC to commit: ${GCC_COMMIT}"
-      git -C gcc-src fetch --depth=1 origin "${GCC_COMMIT}"
-      git -C gcc-src checkout "${GCC_COMMIT}"
+      git clone --branch="${GCC_BRANCH}" https://gnu.googlesource.com/gcc gcc-src
+      git -C gcc-src fetch origin "${GCC_COMMIT}"
+      git -C gcc-src checkout FETCH_HEAD
+    else
+      git clone --depth=1 --branch="${GCC_BRANCH}" https://gnu.googlesource.com/gcc gcc-src
     fi
   fi
 
   if [[ ! -d "binutils-src" ]]; then
     log "Cloning Binutils from ${BINUTILS_BRANCH}..."
-    git clone --depth=1 --branch="${BINUTILS_BRANCH}" https://gnu.googlesource.com/binutils-gdb binutils-src
     if [[ -n "${BINUTILS_COMMIT}" ]]; then
       log "Pinning Binutils to commit: ${BINUTILS_COMMIT}"
-      git -C binutils-src fetch --depth=1 origin "${BINUTILS_COMMIT}"
-      git -C binutils-src checkout "${BINUTILS_COMMIT}"
+      git clone --branch="${BINUTILS_BRANCH}" https://gnu.googlesource.com/binutils-gdb binutils-src
+      git -C binutils-src fetch origin "${BINUTILS_COMMIT}"
+      git -C binutils-src checkout FETCH_HEAD
+    else
+      git clone --depth=1 --branch="${BINUTILS_BRANCH}" https://gnu.googlesource.com/binutils-gdb binutils-src
     fi
   fi
 
