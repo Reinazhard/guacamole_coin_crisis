@@ -586,10 +586,8 @@ print_summary() {
   echo -e "${BOLD}╚══════════════════════════════════════════════════════════╝${RESET}"
   echo
   log "Verify the toolchain:"
-  echo "${PREFIX}/bin/${TARGET}-gcc --version"
-  ./${PREFIX}/bin/${TARGET}-gcc --version
-  echo "    ${PREFIX}/bin/${TARGET}-gcc -Q --help=target | grep march"
-  ./${PREFIX}/bin/${TARGET}-gcc -Q --help=target | grep march
+  "${PREFIX}/bin/${TARGET}-gcc" --version
+  "${PREFIX}/bin/${TARGET}-gcc" -Q --help=target | grep march
   echo
 }
 
