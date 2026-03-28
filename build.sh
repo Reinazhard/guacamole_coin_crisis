@@ -609,7 +609,6 @@ if [[ "${STAGES[0]}" == "all" ]]; then
   build_gcc_pass2
   print_summary
 else
-  check_deps
   for stage in "${STAGES[@]}"; do
     if declare -f "$stage" > /dev/null; then
       $stage
