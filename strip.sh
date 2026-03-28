@@ -24,13 +24,17 @@ log "Indexing binaries (this is much faster now)..."
 # Use '+' to batch file arguments, eliminating massive process overhead
 find "$CUR_DIR" -type f -exec file {} + > "$IDX" || true
 
+# Target specific debug sections to remove, but explicitly spare .debug_frame
+# to ensure basic stack unwinding (kernel panics, exceptions) remains functional.
+STRIP_FLAGS="-R .comment -R .note -R .debug_info -R .debug_aranges -R .debug_pubnames -R .debug_pubtypes -R .debug_abbrev -R .debug_line -R .debug_str -R .debug_ranges -R .debug_loc -R .debug_rnglists -R .debug_loclists"
+
 # Safely extract filenames and strip them.
 # `sed` cleanly captures everything before the first colon and space `: `,
 # avoiding issues with spaces in directory paths unlike `awk`.
 process_lines() {
         local tool="$1"
         sed 's/:[[:space:]].*//' | while IFS= read -r filepath; do
-                "$tool" --strip-unneeded "$filepath" 2>/dev/null || true
+                "$tool" $STRIP_FLAGS "$filepath" 2>/dev/null || true
         done
 }
 
