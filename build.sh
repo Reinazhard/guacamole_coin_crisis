@@ -318,6 +318,7 @@ build_binutils() {
       --enable-deterministic-archives \
       --disable-nls \
       --disable-werror \
+      --disable-gprofng \
       --enable-kernel="${LINUX_VER}" \
       --disable-docs \
       CFLAGS="${HOST_CFLAGS}" \
