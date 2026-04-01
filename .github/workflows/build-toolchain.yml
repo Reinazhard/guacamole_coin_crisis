@@ -19,8 +19,8 @@ on:
         default: false
 
 env:
-  GCC_COMMIT: "61f6c04150e59fc9"
-  BINUTILS_COMMIT: "a9f0052b9dc75eff"
+  GCC_COMMIT: "915e4288408594416fb032df4c8dc768f52d5280"
+  BINUTILS_COMMIT: "f495ebba36784a13057fd8a2005dd314fe3ca47d"
 
 jobs:
   build-toolchain:
