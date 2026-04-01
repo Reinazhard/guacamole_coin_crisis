@@ -66,7 +66,7 @@ BUILD_CXXFLAGS="-O3 -pipe -march=x86-64-v3 -fomit-frame-pointer"
 
 HOST_CFLAGS="-O3 -pipe -march=x86-64-v3 -fno-semantic-interposition -flto=auto -fno-fat-lto-objects -fipa-pta -fomit-frame-pointer"
 HOST_CXXFLAGS="-O3 -pipe -march=x86-64-v3 -fno-semantic-interposition -flto=auto -fno-fat-lto-objects -fipa-pta -fomit-frame-pointer"
-HOST_LDFLAGS="-Wl,-O1 -Wl,--as-needed -Wl,--sort-common -fuse-ld=mold"
+HOST_LDFLAGS="-Wl,-O1 -Wl,--as-needed -Wl,--sort-common -fuse-ld=mold -flto=auto"
 
 TARGET_CFLAGS="-O3 -pipe -fgraphite-identity -floop-nest-optimize -fno-semantic-interposition -fipa-pta -fstack-protector-strong -ffunction-sections -fdata-sections -fomit-frame-pointer"
 TARGET_CXXFLAGS="-O3 -pipe -fgraphite-identity -floop-nest-optimize -fno-semantic-interposition -fipa-pta -fstack-protector-strong -ffunction-sections -fdata-sections -fomit-frame-pointer"
