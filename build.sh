@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0
 #
+# Copyright (C) 2026 M. "Harumajati" Alfarozi
+#
 # Cross-compiler build script
 # Produces a redistributable GNU cross-toolchain for building Linux kernels.
 #
