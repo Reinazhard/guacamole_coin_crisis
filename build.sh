@@ -66,9 +66,11 @@ BUILD_CXXFLAGS="-O3 -pipe -march=x86-64-v3 -fomit-frame-pointer"
 
 HOST_CFLAGS="-O3 -pipe -march=x86-64-v3 -fno-semantic-interposition -flto=auto -fno-fat-lto-objects -fipa-pta -fomit-frame-pointer"
 HOST_CXXFLAGS="-O3 -pipe -march=x86-64-v3 -fno-semantic-interposition -flto=auto -fno-fat-lto-objects -fipa-pta -fomit-frame-pointer"
+HOST_LDFLAGS="-Wl,-O1 -Wl,--as-needed -Wl,--sort-common"
 
 TARGET_CFLAGS="-O3 -pipe -fgraphite-identity -floop-nest-optimize -fno-semantic-interposition -fipa-pta -fstack-protector-strong -ffunction-sections -fdata-sections -fomit-frame-pointer"
 TARGET_CXXFLAGS="-O3 -pipe -fgraphite-identity -floop-nest-optimize -fno-semantic-interposition -fipa-pta -fstack-protector-strong -ffunction-sections -fdata-sections -fomit-frame-pointer"
+TARGET_LDFLAGS="-Wl,-O1 -Wl,--as-needed -Wl,--sort-common"
 
 # ─────────────────────────────────────────────────────────────────
 # ARGUMENT PARSING
@@ -316,7 +318,7 @@ build_binutils() {
       --disable-docs \
       CFLAGS="${HOST_CFLAGS}" \
       CXXFLAGS="${HOST_CXXFLAGS}" \
-      LDFLAGS="-static-libstdc++ -static-libgcc" \
+      LDFLAGS="-static-libstdc++ -static-libgcc ${HOST_LDFLAGS}" \
       2>&1 | tee "${WORK_DIR}/log-binutils-configure.txt"
 
   make
@@ -398,7 +400,8 @@ _configure_gcc() {
       CXXFLAGS_FOR_TARGET="${TARGET_CXXFLAGS}" \
       CFLAGS_FOR_BUILD="${BUILD_CFLAGS}" \
       CXXFLAGS_FOR_BUILD="${BUILD_CXXFLAGS}" \
-      LDFLAGS="-static-libstdc++ -static-libgcc" \
+      LDFLAGS="-static-libstdc++ -static-libgcc ${HOST_LDFLAGS}" \
+      LDFLAGS_FOR_TARGET="${TARGET_LDFLAGS}" \
       "$@" \
       2>&1 | tee "${WORK_DIR}/log-gcc-${2}-configure.txt"
 }
