@@ -49,7 +49,7 @@ jobs:
             gcc-src
             binutils-src
             sources/
-          key: sources-${{ hashFiles('build.sh') }}
+          key: sources-${{ hashFiles('.version-pins') }}
 
       - name: Install dependencies
         run: |

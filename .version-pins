@@ -1,0 +1,13 @@
+# Version pins for source cache invalidation
+# Only changes to these values should invalidate the source cache.
+GCC_BRANCH=releases/gcc-15
+GCC_COMMIT=f495ebba36784a13057fd8a2005dd314fe3ca47d
+BINUTILS_BRANCH=binutils-2_46-branch
+BINUTILS_COMMIT=915e4288408594416fb032df4c8dc768f52d5280
+SHALLOW_SINCE=2026-03-30
+GLIBC_VER=2.43
+LINUX_VER=6.19
+GMP_VER=6.3.0
+MPFR_VER=4.2.2
+MPC_VER=1.4.0
+ISL_VER=0.26

@@ -37,20 +37,8 @@ elapsed() {
 # ─────────────────────────────────────────────────────────────────
 # VERSION PINS & SOURCE REPOSITORIES
 # ─────────────────────────────────────────────────────────────────
-GCC_BRANCH="releases/gcc-15"
-BINUTILS_BRANCH="binutils-2_46-branch"
-
-GCC_COMMIT="f495ebba36784a13057fd8a2005dd314fe3ca47d"
-BINUTILS_COMMIT="915e4288408594416fb032df4c8dc768f52d5280"
-# For shallow cloning
-SHALLOW_SINCE="2026-03-30"
-
-GLIBC_VER="2.43"
-LINUX_VER="6.19"
-GMP_VER="6.3.0"
-MPFR_VER="4.2.2"
-MPC_VER="1.4.0"
-ISL_VER="0.26"
+# Source version pins from dedicated file for cache invalidation
+source "${BASH_SOURCE%/*}/.version-pins"
 
 # ─────────────────────────────────────────────────────────────────
 # FLAG PHILOSOPHY
