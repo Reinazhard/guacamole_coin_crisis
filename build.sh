@@ -414,11 +414,9 @@ build_gcc_pass1() {
       --disable-shared \
       --disable-threads \
       --disable-libatomic \
-      --disable-libgomp \
       --disable-libquadmath \
       --disable-libvtv \
       --disable-libstdcxx \
-      --disable-gcov \
       --disable-libffi
 
   make all-gcc
