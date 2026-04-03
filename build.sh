@@ -255,19 +255,13 @@ download_resources() {
   done
   wait
 
-  # Integrate GCC prerequisites as in-tree symlinks.
-  # GCC's configure will prefer these over any system-installed versions,
+  # Integrate prerequisites as in-tree symlinks for both GCC and Binutils.
+  # GCC/Binutils configure will prefer these over system-installed versions,
   # ensuring a fully deterministic and reproducible build.
-  log "Linking GCC prerequisites in-tree..."
+  log "Linking prerequisites in-tree..."
   for dep_dir in "gmp-${GMP_VER}" "mpfr-${MPFR_VER}" "mpc-${MPC_VER}" "isl-${ISL_VER}"; do
-    local dep_name="${dep_dir%%-*}"
+    dep_name="${dep_dir%%-*}"
     ln -sfn "../${dep_dir}" "gcc-src/${dep_name}"
-  done
-
-  # Symlink prerequisites to Binutils
-  log "Linking Binutils prerequisites in-tree..."
-  for dep_dir in "gmp-${GMP_VER}" "mpfr-${MPFR_VER}" "mpc-${MPC_VER}" "isl-${ISL_VER}"; do
-    local dep_name="${dep_dir%%-*}"
     ln -sfn "../${dep_dir}" "binutils-src/${dep_name}"
   done
 
