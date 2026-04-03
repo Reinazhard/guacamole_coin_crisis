@@ -14,7 +14,7 @@ log "Target directory: $CUR_DIR"
 LLVMS=$(command -v llvm-strip || true)
 X86S=${LLVMS:-$(command -v strip || true)}
 A64S=${LLVMS:-$(command -v aarch64-linux-gnu-strip || true)}
-A32S=${LLVMS:-$(command -v arm-linux-gnueabi-strip || command -v arm-linux-gnu-strip || true)}
+A32S=${LLVMS:-$(command -v arm-linux-gnueabihf-strip || true)}
 
 # Use a safely handled temporary file
 IDX=$(mktemp)
