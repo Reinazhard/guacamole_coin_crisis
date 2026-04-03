@@ -373,7 +373,9 @@ build_linux_headers() {
 #
 # ─────────────────────────────────────────────────────────────────
 _configure_gcc() {
-  local src_dir="$1"; shift
+  local src_dir="$1"
+  local pass_name="$2"
+  shift 2
 
   "../${src_dir}/configure" \
       --target="${TARGET}" \
@@ -416,7 +418,7 @@ _configure_gcc() {
       LDFLAGS="-static-libstdc++ -static-libgcc ${HOST_LDFLAGS}" \
       LDFLAGS_FOR_TARGET="${TARGET_LDFLAGS}" \
       "$@" \
-      2>&1 | tee "${WORK_DIR}/log-gcc-${2}-configure.txt"
+      2>&1 | tee "${WORK_DIR}/log-gcc-${pass_name}-configure.txt"
 }
 
 build_gcc_pass1() {
