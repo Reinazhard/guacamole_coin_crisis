@@ -76,9 +76,11 @@ jobs:
 
       - name: Build Stage 5 (GCC Pass 2)
         run: |
-          PGO_FLAG=""
-          if [ "${{ inputs.enable_pgo }}" = "true" ]; then PGO_FLAG="-p"; fi
-          bash build.sh -a "${{ matrix.arch }}" $PGO_FLAG build_gcc_pass2
+          if [ "${{ inputs.enable_pgo }}" = "true" ]; then
+            bash build.sh -a "${{ matrix.arch }}" -p build_gcc_pass2
+          else
+            bash build.sh -a "${{ matrix.arch }}" build_gcc_pass2
+          fi
 
       - name: Print Summary
         run: |
