@@ -77,20 +77,20 @@ TARGET_LDFLAGS="-Wl,-O1 -Wl,--as-needed -Wl,--sort-common"
 # ─────────────────────────────────────────────────────────────────
 # ARGUMENT PARSING
 # ─────────────────────────────────────────────────────────────────
-ENABLE_PGO=false
+ENABLE_PGO=true
 
 usage() {
-  echo "Usage: $0 -a <arch> [-p] [stage...]"
+  echo "Usage: $0 -a <arch> [-n] [stage...]"
   echo "  -a  Target architecture: arm64 | arm"
-  echo "  -p  Enable PGO (Profile-Guided Optimisation) for the compiler host binary"
+  echo "  -n  Disable PGO (Profile-Guided Optimisation) — build without training"
   echo "  stage... Optional specific stages to run (e.g., build_binutils)"
   exit 1
 }
 
-while getopts "a:p" flag; do
+while getopts "a:n" flag; do
   case "${flag}" in
     a) ARCH="${OPTARG}" ;;
-    p) ENABLE_PGO=true ;;
+    n) ENABLE_PGO=false ;;
     *) usage ;;
   esac
 done
