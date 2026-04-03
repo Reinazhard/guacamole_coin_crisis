@@ -38,7 +38,8 @@ elapsed() {
 # VERSION PINS & SOURCE REPOSITORIES
 # ─────────────────────────────────────────────────────────────────
 # Source version pins from dedicated file for cache invalidation
-source "${BASH_SOURCE%/*}/.version-pins"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/.version-pins"
 
 # ─────────────────────────────────────────────────────────────────
 # FLAG PHILOSOPHY
