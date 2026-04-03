@@ -10,11 +10,11 @@ ok()   { echo -e "\033[0;32m[DONE]\033[0m  $*"; }
 CUR_DIR="${1:-$(pwd)}"
 log "Target directory: $CUR_DIR"
 
-# Try to use llvm-strip, fall back to binutils strip
-LLVMS=$(command -v llvm-strip || true)
-X86S=${LLVMS:-$(command -v strip || true)}
-A64S=${LLVMS:-$(command -v aarch64-linux-gnu-strip || true)}
-A32S=${LLVMS:-$(command -v arm-linux-gnueabihf-strip || true)}
+# Use the cross-compiler's own strip utilities from the toolchain we just built.
+# These are guaranteed to exist and correctly handle their target architectures.
+X86S=$(command -v strip || true)
+A64S="${CUR_DIR}/bin/aarch64-linux-gnu-strip"
+A32S="${CUR_DIR}/bin/arm-linux-gnueabihf-strip"
 
 # Use a safely handled temporary file
 IDX=$(mktemp)
