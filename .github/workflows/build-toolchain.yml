@@ -60,7 +60,32 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pacman -Syu --noconfirm base-devel git bison flex texinfo gawk curl tar xz file ncurses python glibc automake autoconf pkgconf gettext rsync zstd cpio kmod bc patch libtool wget gmp mpfr libmpc isl zlib gperf expat openssl mold
+          pacman -Syu --noconfirm base-devel git bison flex texinfo gawk curl tar xz file ncurses python glibc automake autoconf pkgconf gettext rsync zstd cpio kmod bc patch libtool wget gmp mpfr libmpc isl zlib gperf expat openssl mold ccache
+
+      - name: Setup ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ matrix.arch }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.arch }}-
+
+      - name: Configure ccache
+        run: |
+          ccache --set-config=max_size=2G
+          ccache --set-config=compression=true
+          echo "/usr/lib/ccache/bin" >> $GITHUB_PATH
+
+      - name: Cache build stages
+        uses: actions/cache@v4
+        with:
+          path: |
+            gcc-${{ matrix.arch }}
+            .stamp_*
+            build-binutils
+            build-glibc
+            build-gcc-pass1
+          key: build-${{ matrix.arch }}-${{ hashFiles('.version-pins') }}
 
       - name: Download & Extract Sources
         run: bash build.sh -a "${{ matrix.arch }}" download_resources
@@ -96,6 +121,9 @@ jobs:
         run: |
           echo "--- Stripping binaries ---"
           bash strip.sh "gcc-${{ matrix.arch }}/"
+
+      - name: Print ccache stats
+        run: ccache --show-stats
 
       - name: Package artifact
         id: package
