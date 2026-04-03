@@ -490,6 +490,17 @@ build_glibc() {
 # ─────────────────────────────────────────────────────────────────
 # STAGE 5: GCC PASS 2 (Final Compiler)
 # ─────────────────────────────────────────────────────────────────
+
+# Common configure flags for all GCC pass2 variants
+GCC_PASS2_FLAGS=(
+  --enable-shared
+  --enable-threads=posix
+  --enable-linker-build-id
+  --enable-default-ssp
+  --enable-default-pie
+  --disable-libstdcxx-pch
+)
+
 build_gcc_pass2() {
   [[ -f "${WORK_DIR}/.stamp_gcc_pass2" ]] && { ok "GCC Pass 2 already built [cached]"; return 0; }
 
@@ -507,14 +518,7 @@ _build_gcc_pass2_standard() {
   cd "${WORK_DIR}"
   mkdir -p build-gcc-pass2 && cd build-gcc-pass2
 
-  _configure_gcc "gcc-src" "pass2" \
-      --enable-shared \
-      --enable-threads=posix \
-      --enable-linker-build-id \
-      --enable-default-ssp \
-      --enable-default-pie \
-      --disable-libstdcxx-pch \
-      --disable-gcov
+  _configure_gcc "gcc-src" "pass2" "${GCC_PASS2_FLAGS[@]}"
 
   make all
   make install
@@ -561,15 +565,7 @@ _build_gcc_pass2_pgo() {
     rm -rf build-gcc-pgo-instr
     mkdir -p build-gcc-pgo-instr && cd build-gcc-pgo-instr
 
-    # Configure with standard flags; instrumentation is added via BOOT_CFLAGS
-    _configure_gcc "gcc-src" "pass2-pgo-instr" \
-        --enable-shared \
-        --enable-threads=posix \
-        --enable-linker-build-id \
-        --enable-default-ssp \
-        --enable-default-pie \
-        --disable-libstdcxx-pch \
-        --disable-gcov
+    _configure_gcc "gcc-src" "pass2-pgo-instr" "${GCC_PASS2_FLAGS[@]}"
 
     # BOOT_CFLAGS applies to the stage2+ compiler build.
     # -fprofile-generate instruments the resulting binaries.
@@ -633,14 +629,7 @@ _build_gcc_pass2_pgo() {
   rm -rf build-gcc-pgo-final
   mkdir -p build-gcc-pgo-final && cd build-gcc-pgo-final
 
-  _configure_gcc "gcc-src" "pass2-pgo-final" \
-      --enable-shared \
-      --enable-threads=posix \
-      --enable-linker-build-id \
-      --enable-default-ssp \
-      --enable-default-pie \
-      --disable-libstdcxx-pch \
-      --disable-gcov
+  _configure_gcc "gcc-src" "pass2-pgo-final" "${GCC_PASS2_FLAGS[@]}"
 
   # -fprofile-use applies the collected profile data.
   # -fprofile-correction handles slight mismatches from code changes.
