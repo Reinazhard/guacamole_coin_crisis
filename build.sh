@@ -394,7 +394,6 @@ _configure_gcc() {
       --disable-multilib \
       --disable-nls \
       --disable-werror \
-      --enable-kernel="${LINUX_VER}" \
       --disable-docs \
       CFLAGS="${HOST_CFLAGS}" \
       CXXFLAGS="${HOST_CXXFLAGS}" \
