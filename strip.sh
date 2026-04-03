@@ -33,14 +33,13 @@ STRIP_FLAGS=(
     -R .debug_loc -R .debug_rnglists -R .debug_loclists
   )
 
-# Safely extract filenames and strip them.
-# `sed` cleanly captures everything before the first colon and space `: `,
-# avoiding issues with spaces in directory paths unlike `awk`.
+# Safely extract filenames and strip them in parallel.
+# Uses xargs -P for parallel execution, significantly faster on multi-core.
 process_lines() {
-        local tool="$1"
-        sed 's/:[[:space:]].*//' | while IFS= read -r filepath; do
-                "$tool" "${STRIP_FLAGS[@]}" "$filepath" 2>/dev/null || true
-        done
+	local tool="$1"
+	local jobs="${2:-$(nproc)}"
+	sed 's/:[[:space:]].*//' | \
+		xargs -P "$jobs" -I {} "$tool" "${STRIP_FLAGS[@]}" {} 2>/dev/null || true
 }
 
 if [[ -n "$X86S" && -x "$X86S" ]]; then
