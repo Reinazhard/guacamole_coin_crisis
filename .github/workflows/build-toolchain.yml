@@ -18,10 +18,6 @@ on:
         type: boolean
         default: false
 
-env:
-  GCC_COMMIT: "915e4288408594416fb032df4c8dc768f52d5280"
-  BINUTILS_COMMIT: "f495ebba36784a13057fd8a2005dd314fe3ca47d"
-
 jobs:
   build-toolchain:
     name: Build ${{ matrix.arch }} (${{ matrix.target_triple }})
@@ -53,7 +49,7 @@ jobs:
             gcc-src
             binutils-src
             sources/
-          key: sources-${{ env.GCC_COMMIT }}-${{ env.BINUTILS_COMMIT }}
+          key: sources-${{ hashFiles('build.sh') }}
 
       - name: Install dependencies
         run: |
