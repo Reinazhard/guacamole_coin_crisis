@@ -624,8 +624,18 @@ _build_gcc_pass2_pgo() {
   log "Phase 3/3: Rebuilding compiler with profile data..."
   cd "${WORK_DIR}"
 
-  # Remove any previous compiler from PREFIX
-  rm -rf "${PREFIX:?}"/*
+  # Only remove GCC-specific directories, preserve binutils/glibc/headers.
+  # When using cached profiles, Phase 1 & 2 are skipped so binutils etc.
+  # weren't reinstalled — we must not delete them.
+  rm -rf "${PREFIX:?}/lib/gcc" "${PREFIX}/libexec" \
+         "${PREFIX}/include/c++" "${PREFIX}/share"
+  # Remove old GCC binaries but keep binutils (as, ld, ar, etc.)
+  find "${PREFIX}/bin" -name "${TARGET}-gcc*" -delete 2>/dev/null || true
+  find "${PREFIX}/bin" -name "${TARGET}-g++*" -delete 2>/dev/null || true
+  find "${PREFIX}/bin" -name "${TARGET}-c++*" -delete 2>/dev/null || true
+  find "${PREFIX}/bin" -name "${TARGET}-cpp*" -delete 2>/dev/null || true
+  find "${PREFIX}/bin" -name "${TARGET}-gcov*" -delete 2>/dev/null || true
+  find "${PREFIX}/bin" -name "${TARGET}-lto*" -delete 2>/dev/null || true
 
   rm -rf build-gcc-pgo-final
   mkdir -p build-gcc-pgo-final && cd build-gcc-pgo-final
