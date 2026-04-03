@@ -545,26 +545,31 @@ _build_gcc_pass2_standard() {
 # ─────────────────────────────────────────────────────────────────
 # GCC PASS 2 (PGO VARIANT)
 #
-# Uses GCC's built-in profiledbootstrap target, which is the
-# canonical, supported way to build a PGO-optimised GCC.
+# Kernel-optimised PGO: trains the compiler on actual kernel
+# compilation rather than GCC's self-compilation (profiledbootstrap).
 #
-# The profiledbootstrap target performs:
-#   stage1: build an instrumented GCC
-#   stage2: use stage1 to compile GCC itself (training run — the
-#           act of compiling GCC is the profiling workload)
-#   stage3: rebuild GCC using the collected profiles
+# Three-phase process:
+#   Phase 1: Build an instrumented GCC with -fprofile-generate
+#   Phase 2: Use it to compile a Linux kernel (training workload)
+#   Phase 3: Rebuild GCC with -fprofile-use using collected profiles
 #
-# This is correct and avoids the fragile manual sed/prefix tricks
-# in the previous implementation.
-#
-# Reference: https://gcc.gnu.org/install/build.html#TOC4
+# This produces a compiler optimised for the hot paths exercised
+# during kernel compilation, resulting in faster kernel builds.
 # ─────────────────────────────────────────────────────────────────
 _build_gcc_pass2_pgo() {
-  header "STAGE 5: GCC PASS 2 (PGO BOOTSTRAP)"
-  cd "${WORK_DIR}"
-  mkdir -p build-gcc-pgo && cd build-gcc-pgo
+  header "STAGE 5: GCC PASS 2 (KERNEL-OPTIMISED PGO)"
 
-  _configure_gcc "gcc-src" "pass2-pgo" \
+  local PROFILE_DIR="${WORK_DIR}/pgo-profiles"
+  mkdir -p "${PROFILE_DIR}"
+
+  # ── Phase 1: Build instrumented compiler ──────────────────────
+  log "Phase 1/3: Building instrumented compiler..."
+  cd "${WORK_DIR}"
+  rm -rf build-gcc-pgo-instr
+  mkdir -p build-gcc-pgo-instr && cd build-gcc-pgo-instr
+
+  # Configure with standard flags; instrumentation is added via BOOT_CFLAGS
+  _configure_gcc "gcc-src" "pass2-pgo-instr" \
       --enable-shared \
       --enable-threads=posix \
       --enable-linker-build-id \
@@ -573,13 +578,81 @@ _build_gcc_pass2_pgo() {
       --disable-libstdcxx-pch \
       --disable-gcov
 
-  # profiledbootstrap is GCC's own three-stage PGO build.
-  # It is self-contained and does not require external intervention.
-  make profiledbootstrap
+  # BOOT_CFLAGS applies to the stage2+ compiler build.
+  # -fprofile-generate instruments the resulting binaries.
+  make BOOT_CFLAGS="-O2 -g0 -fprofile-generate=${PROFILE_DIR}" \
+       BOOT_LDFLAGS="-fprofile-generate=${PROFILE_DIR}" \
+       all
+
+  # Install to PREFIX so we can use it for training
   make install
 
+  ok "Phase 1 complete: instrumented compiler installed  [$(elapsed)]"
+
+  # ── Phase 2: Training run — compile a kernel ──────────────────
+  log "Phase 2/3: Training on kernel compilation..."
+  cd "${WORK_DIR}/linux-${LINUX_VER}"
+
+  # Clean any previous build artifacts
+  make ARCH="${KERNEL_ARCH}" mrproper
+
+  # Use defconfig as a representative kernel configuration
+  make ARCH="${KERNEL_ARCH}" CROSS_COMPILE="${TARGET}-" defconfig
+
+  # Compile the kernel — this generates PGO profile data.
+  # The || true ensures we continue even if the kernel build fails
+  # (partial compilation still produces useful profiles).
+  log "Compiling kernel for PGO training (this takes a while)..."
+  make ARCH="${KERNEL_ARCH}" CROSS_COMPILE="${TARGET}-" -j${JOBS} || true
+
+  # Clean up kernel build artifacts (we only needed the profile data)
+  make ARCH="${KERNEL_ARCH}" mrproper
+
+  ok "Phase 2 complete: profile data collected  [$(elapsed)]"
+
+  # Verify profiles were generated
+  local profile_count
+  profile_count=$(find "${PROFILE_DIR}" -name "*.gcda" 2>/dev/null | wc -l)
+  if (( profile_count == 0 )); then
+    warn "No profile data found! Falling back to standard build."
+    _build_gcc_pass2_standard
+    return
+  fi
+  log "Collected ${profile_count} profile files"
+
+  # ── Phase 3: Rebuild with collected profiles ──────────────────
+  log "Phase 3/3: Rebuilding compiler with profile data..."
   cd "${WORK_DIR}"
-  ok "GCC PGO Pass 2 done  [$(elapsed)]"
+
+  # Remove the instrumented compiler from PREFIX
+  rm -rf "${PREFIX:?}"/*
+
+  rm -rf build-gcc-pgo-final
+  mkdir -p build-gcc-pgo-final && cd build-gcc-pgo-final
+
+  _configure_gcc "gcc-src" "pass2-pgo-final" \
+      --enable-shared \
+      --enable-threads=posix \
+      --enable-linker-build-id \
+      --enable-default-ssp \
+      --enable-default-pie \
+      --disable-libstdcxx-pch \
+      --disable-gcov
+
+  # -fprofile-use applies the collected profile data.
+  # -fprofile-correction handles slight mismatches from code changes.
+  # -Wno-missing-profile silences warnings for functions not profiled.
+  make BOOT_CFLAGS="-O2 -g0 -fprofile-use=${PROFILE_DIR} -fprofile-correction -Wno-missing-profile" \
+       BOOT_LDFLAGS="-fprofile-use=${PROFILE_DIR}" \
+       all
+
+  make install
+
+  # Clean up profile data
+  rm -rf "${PROFILE_DIR}"
+
+  cd "${WORK_DIR}"
+  ok "Phase 3 complete: PGO-optimised compiler installed  [$(elapsed)]"
 }
 
 # ─────────────────────────────────────────────────────────────────
