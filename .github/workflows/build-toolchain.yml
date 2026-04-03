@@ -51,6 +51,13 @@ jobs:
             sources/
           key: sources-${{ hashFiles('.version-pins') }}
 
+      - name: Cache PGO profiles
+        if: inputs.disable_pgo != true
+        uses: actions/cache@v4
+        with:
+          path: pgo-profiles
+          key: pgo-${{ matrix.arch }}-${{ hashFiles('.version-pins') }}
+
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm base-devel git bison flex texinfo gawk curl tar xz file ncurses python glibc automake autoconf pkgconf gettext rsync zstd cpio kmod bc patch libtool wget gmp mpfr libmpc isl zlib gperf expat openssl mold
