@@ -164,7 +164,15 @@ JOBS=$(nproc --all)
 export MAKEFLAGS="-j${JOBS}"
 
 # ─────────────────────────────────────────────────────────────────
-if [[ "${STAGES[*]}" != "print_summary" ]]; then
+# STAGES is parsed at the end of the script; define a helper to check
+# if we should print startup info (i.e., not when only running print_summary).
+_should_print_startup_info() {
+  # Called from entry point after STAGES is set
+  [[ "${STAGES[*]}" != "print_summary" ]]
+}
+
+# Startup info is printed from the entry point after STAGES is defined.
+_print_startup_info() {
   log "Build machine : ${BUILD_TRIPLE}"
   log "Host machine  : ${BUILD_TRIPLE}  (same — standard cross-build)"
   log "Target triple : ${TARGET}"
@@ -173,7 +181,7 @@ if [[ "${STAGES[*]}" != "print_summary" ]]; then
   log "Parallel jobs : ${JOBS}"
   log "PGO           : ${ENABLE_PGO}"
   echo
-fi
+}
 
 # ─────────────────────────────────────────────────────────────────
 # DEPENDENCY CHECK
@@ -609,6 +617,9 @@ print_summary() {
 # ENTRY POINT
 # ─────────────────────────────────────────────────────────────────
 STAGES=("${@:-all}")
+
+# Print startup info now that STAGES is defined
+_should_print_startup_info && _print_startup_info
 
 if [[ "${STAGES[0]}" == "all" ]]; then
   check_deps
