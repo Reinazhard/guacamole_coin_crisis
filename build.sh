@@ -672,7 +672,7 @@ print_summary() {
   echo
   if [[ -x "${PREFIX}/bin/${TARGET}-gcc" ]]; then
     log "Verify the toolchain:"
-    "${PREFIX}/bin/${TARGET}-gcc" --version | head -n 1
+    "${PREFIX}/bin/${TARGET}-gcc" -v
   fi
   echo
 }
