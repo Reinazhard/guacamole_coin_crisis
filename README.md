@@ -21,8 +21,8 @@ Each release tarball contains a complete cross-toolchain installed under `gcc-<a
 
 | Architecture | Target Triple | ABI | Kernel | GCC | Binutils | glibc |
 |---|---|---|---|---|---|---|
-| `arm64` | `aarch64-linux-gnu` | LP64, hard-float | 6.19 | 15 (`releases/gcc-15`) | 2.46 | 2.43 |
-| `arm` | `arm-linux-gnueabihf` | EABI hard-float, VFPv3-D16 | 6.19 | 15 (`releases/gcc-15`) | 2.46 | 2.43 |
+| `arm64` | `aarch64-linux-gnu` | LP64, hard-float | 7.0.3 | 16 (`releases/gcc-16`) | 2.46 | 2.43 |
+| `arm` | `arm-linux-gnueabihf` | EABI hard-float, VFPv3-D16 | 7.0.3 | 16 (`releases/gcc-16`) | 2.46 | 2.43 |
 
 The `arm64` build includes Cortex-A53 errata workarounds (835769, 843419). Both targets are built with LTO, Graphite loop optimisations, and PIE/SSP enabled by default.
 
