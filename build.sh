@@ -214,8 +214,15 @@ check_deps() {
   for cmd in gcc g++ make bison flex makeinfo gawk curl tar xz git zstd mold; do
     command -v "$cmd" &>/dev/null || missing+=("$cmd")
   done
-  (( ${#missing[@]} == 0 )) || \
-    die "Missing host tools: ${missing[*]}\nInstall with: pacman -S ${missing[*]}"
+  
+  if (( ${#missing[@]} > 0 )); then
+    warn "Missing host tools: ${missing[*]}"
+    if ! $DRY_RUN; then
+      die "Install missing tools with: pacman -S ${missing[*]}"
+    else
+      warn "[DRY-RUN] Proceeding anyway..."
+    fi
+  fi
 }
 
 # ─────────────────────────────────────────────────────────────────
