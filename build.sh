@@ -17,6 +17,35 @@ ok()     { echo -e "${GREEN}${BOLD}[DONE]${RESET}  $*"; }
 warn()   { echo -e "${YELLOW}${BOLD}[WARN]${RESET}  $*"; }
 die()    { echo -e "${RED}${BOLD}[FAIL]${RESET}  $*" >&2; exit 1; }
 
+# ── Error Handling & Logging ──────────────────────────────────────
+DRY_RUN=false
+LOG_FILE=""
+
+# Trap signals for clean exit and error reporting
+cleanup() {
+  local exit_code=$?
+  if [ $exit_code -ne 0 ] && [ -n "${LOG_FILE}" ] && [ -f "${LOG_FILE}" ]; then
+    echo -e "\n${RED}${BOLD}!!! Build failed. Last 20 lines of ${LOG_FILE}:${RESET}"
+    tail -n 20 "${LOG_FILE}"
+  fi
+  exit $exit_code
+}
+trap cleanup EXIT ERR INT TERM
+
+run_log() {
+  local stage_name="$1"
+  shift
+  LOG_FILE="${WORK_DIR}/build-${stage_name}.log"
+  
+  if $DRY_RUN; then
+    log "[DRY-RUN] $*"
+    return 0
+  fi
+
+  log "Running stage: ${stage_name} (log: build-${stage_name}.log)..."
+  "$@" > "${LOG_FILE}" 2>&1
+}
+
 header() {
   local title="$1"
   local bar; bar=$(printf '═%.0s' $(seq 1 ${#title}))
@@ -52,16 +81,19 @@ source "${SCRIPT_DIR}/.version-pins"
 # TARGET_CFLAGS — flags used when compiling libraries that run on the
 #                 TARGET (libgcc, libstdc++, glibc).
 # ─────────────────────────────────────────────────────────────────
+# Sanitize environment
+unset CFLAGS CXXFLAGS LDFLAGS
+
 BUILD_CFLAGS="-O3 -pipe -march=x86-64-v3 -fomit-frame-pointer"
 BUILD_CXXFLAGS="-O3 -pipe -march=x86-64-v3 -fomit-frame-pointer"
 
 HOST_CFLAGS="-O3 -pipe -march=x86-64-v3 -fno-semantic-interposition -flto=auto -fno-fat-lto-objects -fipa-pta -fomit-frame-pointer"
 HOST_CXXFLAGS="-O3 -pipe -march=x86-64-v3 -fno-semantic-interposition -flto=auto -fno-fat-lto-objects -fipa-pta -fomit-frame-pointer"
-HOST_LDFLAGS="-Wl,-O1 -Wl,--as-needed -Wl,--sort-common -fuse-ld=mold -flto=auto"
+HOST_LDFLAGS="-Wl,-O1 -Wl,--as-needed -Wl,--sort-common -Wl,-z,relro -Wl,-z,now -fuse-ld=mold -flto=auto"
 
-TARGET_CFLAGS="-O3 -pipe -fgraphite-identity -floop-nest-optimize -fno-semantic-interposition -fipa-pta -fstack-protector-strong -ffunction-sections -fdata-sections -fomit-frame-pointer"
-TARGET_CXXFLAGS="-O3 -pipe -fgraphite-identity -floop-nest-optimize -fno-semantic-interposition -fipa-pta -fstack-protector-strong -ffunction-sections -fdata-sections -fomit-frame-pointer"
-TARGET_LDFLAGS="-Wl,-O1 -Wl,--as-needed -Wl,--sort-common"
+TARGET_CFLAGS="-O3 -pipe -fgraphite-identity -floop-nest-optimize -fno-semantic-interposition -fipa-pta -fstack-protector-strong -fstack-clash-protection -Wp,-D_FORTIFY_SOURCE=3 -ffunction-sections -fdata-sections -fomit-frame-pointer"
+TARGET_CXXFLAGS="-O3 -pipe -fgraphite-identity -floop-nest-optimize -fno-semantic-interposition -fipa-pta -fstack-protector-strong -fstack-clash-protection -Wp,-D_FORTIFY_SOURCE=3 -ffunction-sections -fdata-sections -fomit-frame-pointer"
+TARGET_LDFLAGS="-Wl,-O1 -Wl,--as-needed -Wl,--sort-common -Wl,--enable-new-dtags"
 
 # ─────────────────────────────────────────────────────────────────
 # ARGUMENT PARSING
@@ -69,17 +101,19 @@ TARGET_LDFLAGS="-Wl,-O1 -Wl,--as-needed -Wl,--sort-common"
 ENABLE_PGO=true
 
 usage() {
-  echo "Usage: $0 -a <arch> [-n] [stage...]"
+  echo "Usage: $0 -a <arch> [-n] [-d] [stage...]"
   echo "  -a  Target architecture: arm64 | arm"
   echo "  -n  Disable PGO (Profile-Guided Optimisation) — build without training"
+  echo "  -d  Dry-run mode (print commands instead of executing them)"
   echo "  stage... Optional specific stages to run (e.g., build_binutils)"
   exit 1
 }
 
-while getopts "a:n" flag; do
+while getopts "a:nd" flag; do
   case "${flag}" in
     a) ARCH="${OPTARG}" ;;
     n) ENABLE_PGO=false ;;
+    d) DRY_RUN=true ;;
     *) usage ;;
   esac
 done
