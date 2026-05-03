@@ -219,17 +219,45 @@ check_deps() {
 }
 
 # ─────────────────────────────────────────────────────────────────
-# FETCH HELPER
+# FETCH & VERIFY HELPERS
 # ─────────────────────────────────────────────────────────────────
+verify_checksum() {
+  local file="sources/$1"
+  local expected_sha256="$2"
+
+  if [[ -z "${expected_sha256:-}" ]]; then
+    warn "No SHA256 defined for $1. Skipping verification."
+    return 0
+  fi
+
+  if [[ "${SKIP_CHECKSUM:-false}" == "true" ]]; then
+    log "Skipping checksum verification for $1 (SKIP_CHECKSUM=true)"
+    return 0
+  fi
+
+  log "Verifying checksum for $1..."
+  echo "${expected_sha256}  ${file}" | sha256sum --check --status || \
+    die "Checksum verification failed for ${file}!"
+  ok "Checksum for $1 matches."
+}
+
 fetch() {
   local url="$1"
   local file="${url##*/}"
+  local expected_sha256="${2:-}"
+
   if [[ ! -f "sources/${file}" ]]; then
     log "Downloading ${file}..."
-    curl -fL --retry 5 --retry-delay 3 -o "sources/${file}" "${url}"
+    if ! $DRY_RUN; then
+      curl -fL --retry 5 --retry-delay 3 -o "sources/${file}" "${url}"
+    else
+      log "[DRY-RUN] curl -fL ... -o sources/${file} ${url}"
+    fi
   else
     ok "Cached ${file}"
   fi
+
+  verify_checksum "${file}" "${expected_sha256}"
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -244,7 +272,9 @@ download_resources() {
   # Git Sources
   if [[ ! -d "gcc-src" ]]; then
     log "Cloning GCC from ${GCC_BRANCH}..."
-    if [[ -n "${GCC_COMMIT}" ]]; then
+    if $DRY_RUN; then
+      log "[DRY-RUN] git clone --branch=${GCC_BRANCH} ..."
+    elif [[ -n "${GCC_COMMIT}" ]]; then
       log "Pinning GCC to commit: ${GCC_COMMIT}"
       git clone --shallow-since="${SHALLOW_SINCE}" --branch="${GCC_BRANCH}" https://gnu.googlesource.com/gcc gcc-src
       git -C gcc-src checkout "${GCC_COMMIT}"
@@ -255,7 +285,9 @@ download_resources() {
 
   if [[ ! -d "binutils-src" ]]; then
     log "Cloning Binutils from ${BINUTILS_BRANCH}..."
-    if [[ -n "${BINUTILS_COMMIT}" ]]; then
+    if $DRY_RUN; then
+      log "[DRY-RUN] git clone --branch=${BINUTILS_BRANCH} ..."
+    elif [[ -n "${BINUTILS_COMMIT}" ]]; then
       log "Pinning Binutils to commit: ${BINUTILS_COMMIT}"
       git clone --shallow-since="${SHALLOW_SINCE}" --branch="${BINUTILS_BRANCH}" https://gnu.googlesource.com/binutils-gdb binutils-src
       git -C binutils-src checkout "${BINUTILS_COMMIT}"
@@ -265,12 +297,12 @@ download_resources() {
   fi
 
   # Tarball sources
-  fetch "https://ftp.gnu.org/gnu/glibc/glibc-${GLIBC_VER}.tar.xz" &
-  fetch "https://cdn.kernel.org/pub/linux/kernel/v${LINUX_VER%%.*}.x/linux-${LINUX_VER}.tar.xz" &
-  fetch "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VER}.tar.xz" &
-  fetch "https://ftp.gnu.org/gnu/mpfr/mpfr-${MPFR_VER}.tar.xz" &
-  fetch "https://ftp.gnu.org/gnu/mpc/mpc-${MPC_VER}.tar.xz" &
-  fetch "https://libisl.sourceforge.io/isl-${ISL_VER}.tar.xz" &
+  fetch "https://ftp.gnu.org/gnu/glibc/glibc-${GLIBC_VER}.tar.xz" "${GLIBC_SHA256:-}" &
+  fetch "https://cdn.kernel.org/pub/linux/kernel/v${LINUX_VER%%.*}.x/linux-${LINUX_VER}.tar.xz" "${LINUX_SHA256:-}" &
+  fetch "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VER}.tar.xz" "${GMP_SHA256:-}" &
+  fetch "https://ftp.gnu.org/gnu/mpfr/mpfr-${MPFR_VER}.tar.xz" "${MPFR_SHA256:-}" &
+  fetch "https://ftp.gnu.org/gnu/mpc/mpc-${MPC_VER}.tar.xz" "${MPC_SHA256:-}" &
+  fetch "https://libisl.sourceforge.io/isl-${ISL_VER}.tar.xz" "${ISL_SHA256:-}" &
   wait
 
   header "EXTRACTING SOURCES"
@@ -285,40 +317,30 @@ download_resources() {
   do
     if [[ ! -d "${pkg}" ]]; then
       log "Extracting ${pkg}..."
-      tar xf "sources/${pkg}.tar."* &
+      if $DRY_RUN; then
+        log "[DRY-RUN] tar xf sources/${pkg}.tar.*"
+      else
+        tar xf "sources/${pkg}.tar."* &
+      fi
     fi
   done
   wait
 
   # Integrate prerequisites as in-tree symlinks for both GCC and Binutils.
-  # GCC/Binutils configure will prefer these over system-installed versions,
-  # ensuring a fully deterministic and reproducible build.
-  log "Linking prerequisites in-tree..."
-  for dep_dir in "gmp-${GMP_VER}" "mpfr-${MPFR_VER}" "mpc-${MPC_VER}" "isl-${ISL_VER}"; do
-    dep_name="${dep_dir%%-*}"
-    ln -sfn "../${dep_dir}" "gcc-src/${dep_name}"
-    ln -sfn "../${dep_dir}" "binutils-src/${dep_name}"
-  done
-
-  touch "${WORK_DIR}/.stamp_downloaded"
+  if ! $DRY_RUN; then
+    log "Linking prerequisites in-tree..."
+    for dep_dir in "gmp-${GMP_VER}" "mpfr-${MPFR_VER}" "mpc-${MPC_VER}" "isl-${ISL_VER}"; do
+      dep_name="${dep_dir%%-*}"
+      ln -sfn "../${dep_dir}" "gcc-src/${dep_name}"
+      ln -sfn "../${dep_dir}" "binutils-src/${dep_name}"
+    done
+    touch "${WORK_DIR}/.stamp_downloaded"
+  fi
   ok "All sources ready  [$(elapsed)]"
 }
 
 # ─────────────────────────────────────────────────────────────────
 # STAGE 1: BINUTILS
-#
-# Builds the cross-assembler, cross-linker, and binary utilities.
-# These run on HOST, operate on TARGET binaries.
-#
-# Flag notes:
-#   --with-arch is acceptable here: it sets the default linker emulation
-#   for the BFD linker. Unlike GCC's --with-arch, this does not affect
-#   code generation — there is no code generation in the linker.
-#
-#   The linker (-static-libstdc++ -static-libgcc) creates a highly portable
-#   binary relying only on the host's libc, which is usually safe.
-#   A fully -static binutils kills dynamic dlopen() support preventing
-#   liblto_plugin.so from loading. This is the hybrid compromise.
 # ─────────────────────────────────────────────────────────────────
 build_binutils() {
   [[ -f "${WORK_DIR}/.stamp_binutils" ]] && { ok "Binutils already built [cached]"; return 0; }
@@ -327,7 +349,7 @@ build_binutils() {
   cd "${WORK_DIR}"
   mkdir -p build-binutils && cd build-binutils
 
-  ../binutils-src/configure \
+  run_log "binutils-configure" ../binutils-src/configure \
       --target="${TARGET}" \
       --prefix="${PREFIX}" \
       --with-sysroot="${SYSROOT}" \
@@ -340,6 +362,7 @@ build_binutils() {
       --enable-threads \
       --enable-lto \
       --with-zstd \
+      --with-system-zlib \
       --enable-deterministic-archives \
       --disable-nls \
       --disable-werror \
@@ -347,23 +370,20 @@ build_binutils() {
       --disable-docs \
       CFLAGS="${HOST_CFLAGS}" \
       CXXFLAGS="${HOST_CXXFLAGS}" \
-      LDFLAGS="-static-libstdc++ -static-libgcc ${HOST_LDFLAGS}" \
-      2>&1 | tee "${WORK_DIR}/log-binutils-configure.txt"
+      LDFLAGS="-static-libstdc++ -static-libgcc ${HOST_LDFLAGS}"
 
-  make
-  make install
+  run_log "binutils-make" make
+  run_log "binutils-install" make install
 
-  touch "${WORK_DIR}/.stamp_binutils"
+  if ! $DRY_RUN; then
+    touch "${WORK_DIR}/.stamp_binutils"
+  fi
   cd "${WORK_DIR}"
   ok "Binutils done  [$(elapsed)]"
 }
 
 # ─────────────────────────────────────────────────────────────────
 # STAGE 2: LINUX KERNEL HEADERS
-#
-# Installs the kernel UAPI headers into the sysroot.
-# These are required by glibc — glibc's syscall wrappers are
-# generated from kernel header definitions.
 # ─────────────────────────────────────────────────────────────────
 build_linux_headers() {
   [[ -f "${WORK_DIR}/.stamp_linux_headers" ]] && { ok "Linux headers already installed [cached]"; return 0; }
@@ -371,29 +391,26 @@ build_linux_headers() {
   header "STAGE 2: LINUX KERNEL HEADERS"
   cd "${WORK_DIR}/linux-${LINUX_VER}"
 
-  make ARCH="${KERNEL_ARCH}" \
+  run_log "linux-headers" make ARCH="${KERNEL_ARCH}" \
        INSTALL_HDR_PATH="${SYSROOT}/usr" \
        headers_install
 
-  touch "${WORK_DIR}/.stamp_linux_headers"
+  if ! $DRY_RUN; then
+    touch "${WORK_DIR}/.stamp_linux_headers"
+  fi
   cd "${WORK_DIR}"
   ok "Linux headers done  [$(elapsed)]"
 }
 
 # ─────────────────────────────────────────────────────────────────
 # STAGE 3: GCC PASS 1 (Bootstrap / C-only)
-#
-# A minimal C-only compiler sufficient to compile glibc.
-# This compiler has no libc (--without-headers, --with-newlib)
-# and produces a temporary libgcc_eh stub.
-#
 # ─────────────────────────────────────────────────────────────────
 _configure_gcc() {
   local src_dir="$1"
   local pass_name="$2"
   shift 2
 
-  "../${src_dir}/configure" \
+  run_log "gcc-${pass_name}-configure" "../${src_dir}/configure" \
       --target="${TARGET}" \
       --prefix="${PREFIX}" \
       --with-sysroot="${SYSROOT}" \
@@ -410,6 +427,7 @@ _configure_gcc() {
       --enable-plugin \
       --enable-lto \
       --with-zstd \
+      --with-system-zlib \
       --with-gnu-as \
       --with-gnu-ld \
       --with-linker-hash-style=gnu \
@@ -432,8 +450,7 @@ _configure_gcc() {
       CXXFLAGS_FOR_BUILD="${BUILD_CXXFLAGS}" \
       LDFLAGS="-static-libstdc++ -static-libgcc ${HOST_LDFLAGS}" \
       LDFLAGS_FOR_TARGET="${TARGET_LDFLAGS}" \
-      "$@" \
-      2>&1 | tee "${WORK_DIR}/log-gcc-${pass_name}-configure.txt"
+      "$@"
 }
 
 build_gcc_pass1() {
@@ -454,24 +471,20 @@ build_gcc_pass1() {
       --disable-libstdcxx \
       --disable-libffi
 
-  make all-gcc
-  make install-gcc
-  make all-target-libgcc
-  make install-target-libgcc
+  run_log "gcc-pass1-make-gcc" make all-gcc
+  run_log "gcc-pass1-install-gcc" make install-gcc
+  run_log "gcc-pass1-make-libgcc" make all-target-libgcc
+  run_log "gcc-pass1-install-libgcc" make install-target-libgcc
 
-  touch "${WORK_DIR}/.stamp_gcc_pass1"
+  if ! $DRY_RUN; then
+    touch "${WORK_DIR}/.stamp_gcc_pass1"
+  fi
   cd "${WORK_DIR}"
   ok "GCC Pass 1 done  [$(elapsed)]"
 }
 
 # ─────────────────────────────────────────────────────────────────
 # STAGE 4: GLIBC
-#
-# Builds and installs glibc into the sysroot using the pass-1 compiler.
-#
-# The two-phase install (headers first, then full build) is the
-# canonical glibc cross-compilation procedure.
-#
 # ─────────────────────────────────────────────────────────────────
 build_glibc() {
   [[ -f "${WORK_DIR}/.stamp_glibc" ]] && { ok "Glibc already built [cached]"; return 0; }
@@ -480,7 +493,7 @@ build_glibc() {
   cd "${WORK_DIR}"
   mkdir -p build-glibc && cd build-glibc
 
-  ../glibc-${GLIBC_VER}/configure \
+  run_log "glibc-configure" ../glibc-${GLIBC_VER}/configure \
       --host="${TARGET}" \
       --build="${BUILD_TRIPLE}" \
       --prefix="/usr" \
@@ -493,29 +506,27 @@ build_glibc() {
       CC="${TARGET}-gcc" \
       CXX="${TARGET}-g++" \
       CFLAGS="${TARGET_CFLAGS}" \
-      CXXFLAGS="${TARGET_CXXFLAGS}" \
-      2>&1 | tee "${WORK_DIR}/log-glibc-configure.txt"
+      CXXFLAGS="${TARGET_CXXFLAGS}"
 
   # Install headers and minimal bootstrap stubs first.
-  # This satisfies the circular dependency: gcc needs glibc headers to
-  # build libgcc; glibc needs gcc to build itself.
-  mkdir -p "${SYSROOT}/usr/lib" "${SYSROOT}/usr/include/gnu"
+  if ! $DRY_RUN; then
+    mkdir -p "${SYSROOT}/usr/lib" "${SYSROOT}/usr/include/gnu"
+    run_log "glibc-install-headers" make install_root="${SYSROOT}" install-bootstrap-headers=yes install-headers
+    run_log "glibc-make-csu" make csu/subdir_lib
 
-  make install_root="${SYSROOT}" install-bootstrap-headers=yes install-headers
-  make csu/subdir_lib
-
-  # Install CRT objects and create a dummy libc.so stub.
-  # This is enough for the pass-1 libgcc to link against.
-  install -m 644 csu/crt1.o csu/crti.o csu/crtn.o "${SYSROOT}/usr/lib/"
-  "${TARGET}-gcc" -nostdlib -nostartfiles -shared -x c /dev/null \
-      -o "${SYSROOT}/usr/lib/libc.so"
-  touch "${SYSROOT}/usr/include/gnu/stubs.h"
+    install -m 644 csu/crt1.o csu/crti.o csu/crtn.o "${SYSROOT}/usr/lib/"
+    "${TARGET}-gcc" -nostdlib -nostartfiles -shared -x c /dev/null \
+        -o "${SYSROOT}/usr/lib/libc.so"
+    touch "${SYSROOT}/usr/include/gnu/stubs.h"
+  fi
 
   # Full glibc build and install.
-  make
-  make install_root="${SYSROOT}" install
+  run_log "glibc-make" make
+  run_log "glibc-install" make install_root="${SYSROOT}" install
 
-  touch "${WORK_DIR}/.stamp_glibc"
+  if ! $DRY_RUN; then
+    touch "${WORK_DIR}/.stamp_glibc"
+  fi
   cd "${WORK_DIR}"
   ok "Glibc done  [$(elapsed)]"
 }
