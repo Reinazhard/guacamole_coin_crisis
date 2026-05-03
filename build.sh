@@ -554,7 +554,9 @@ build_gcc_pass2() {
     _build_gcc_pass2_standard
   fi
 
-  touch "${WORK_DIR}/.stamp_gcc_pass2"
+  if ! $DRY_RUN; then
+    touch "${WORK_DIR}/.stamp_gcc_pass2"
+  fi
 }
 
 _build_gcc_pass2_standard() {
@@ -564,8 +566,8 @@ _build_gcc_pass2_standard() {
 
   _configure_gcc "gcc-src" "pass2" "${GCC_PASS2_FLAGS[@]}"
 
-  make all
-  make install
+  run_log "gcc-pass2-make" make all
+  run_log "gcc-pass2-install" make install
 
   cd "${WORK_DIR}"
   ok "GCC Pass 2 done  [$(elapsed)]"
@@ -573,18 +575,6 @@ _build_gcc_pass2_standard() {
 
 # ─────────────────────────────────────────────────────────────────
 # GCC PASS 2 (PGO VARIANT)
-#
-# Kernel-optimised PGO: trains the compiler on actual kernel
-# compilation rather than GCC's self-compilation (profiledbootstrap).
-#
-# Three-phase process:
-#   Phase 1: Build an instrumented GCC with -fprofile-generate
-#   Phase 2: Use it to compile a Linux kernel (training workload)
-#   Phase 3: Rebuild GCC with -fprofile-use using collected profiles
-#
-# Profile caching: If pgo-profiles/ exists with valid .gcda files,
-# Phases 1 & 2 are skipped and only Phase 3 runs. Delete pgo-profiles/
-# to force retraining.
 # ─────────────────────────────────────────────────────────────────
 _build_gcc_pass2_pgo() {
   header "STAGE 5: GCC PASS 2 (KERNEL-OPTIMISED PGO)"
@@ -601,24 +591,23 @@ _build_gcc_pass2_pgo() {
     log "Found ${profile_count} cached PGO profiles — skipping training"
     log "To retrain: rm -rf pgo-profiles/"
   else
-    mkdir -p "${PROFILE_DIR}"
+    if ! $DRY_RUN; then
+      mkdir -p "${PROFILE_DIR}"
+    fi
 
     # ── Phase 1: Build instrumented compiler ──────────────────────
     log "Phase 1/3: Building instrumented compiler..."
     cd "${WORK_DIR}"
-    rm -rf build-gcc-pgo-instr
+    [[ -d build-gcc-pgo-instr ]] && rm -rf build-gcc-pgo-instr
     mkdir -p build-gcc-pgo-instr && cd build-gcc-pgo-instr
 
     _configure_gcc "gcc-src" "pass2-pgo-instr" "${GCC_PASS2_FLAGS[@]}"
 
-    # BOOT_CFLAGS applies to the stage2+ compiler build.
-    # -fprofile-generate instruments the resulting binaries.
-    make BOOT_CFLAGS="-O2 -g0 -fprofile-generate=${PROFILE_DIR}" \
+    run_log "gcc-pgo-instr-make" make BOOT_CFLAGS="-O2 -g0 -fprofile-generate=${PROFILE_DIR}" \
          BOOT_LDFLAGS="-fprofile-generate=${PROFILE_DIR}" \
          all
 
-    # Install to PREFIX so we can use it for training
-    make install
+    run_log "gcc-pgo-instr-install" make install
 
     ok "Phase 1 complete: instrumented compiler installed  [$(elapsed)]"
 
@@ -626,26 +615,20 @@ _build_gcc_pass2_pgo() {
     log "Phase 2/3: Training on kernel compilation..."
     cd "${WORK_DIR}/linux-${LINUX_VER}"
 
-    # Clean any previous build artifacts
-    make ARCH="${KERNEL_ARCH}" mrproper
+    run_log "pgo-kernel-mrproper" make ARCH="${KERNEL_ARCH}" mrproper
+    run_log "pgo-kernel-defconfig" make ARCH="${KERNEL_ARCH}" CROSS_COMPILE="${TARGET}-" defconfig
 
-    # Use defconfig as a representative kernel configuration
-    make ARCH="${KERNEL_ARCH}" CROSS_COMPILE="${TARGET}-" defconfig
-
-    # Compile the kernel — this generates PGO profile data.
-    # The || true ensures we continue even if the kernel build fails
-    # (partial compilation still produces useful profiles).
     log "Compiling kernel for PGO training (this takes a while)..."
-    make ARCH="${KERNEL_ARCH}" CROSS_COMPILE="${TARGET}-" -j${JOBS} || true
+    # Allow failure during training as partial profiles are still useful
+    run_log "pgo-kernel-make" make ARCH="${KERNEL_ARCH}" CROSS_COMPILE="${TARGET}-" -j${JOBS} || true
 
-    # Clean up kernel build artifacts (we only needed the profile data)
-    make ARCH="${KERNEL_ARCH}" mrproper
+    run_log "pgo-kernel-clean" make ARCH="${KERNEL_ARCH}" mrproper
 
     ok "Phase 2 complete: profile data collected  [$(elapsed)]"
 
     # Verify profiles were generated
     profile_count=$(find "${PROFILE_DIR}" -name "*.gcda" 2>/dev/null | wc -l)
-    if (( profile_count == 0 )); then
+    if (( profile_count == 0 )) && ! $DRY_RUN; then
       warn "No profile data found! Falling back to standard build."
       _build_gcc_pass2_standard
       return
@@ -657,34 +640,27 @@ _build_gcc_pass2_pgo() {
   log "Phase 3/3: Rebuilding compiler with profile data..."
   cd "${WORK_DIR}"
 
-  # Only remove GCC-specific directories, preserve binutils/glibc/headers.
-  # When using cached profiles, Phase 1 & 2 are skipped so binutils etc.
-  # weren't reinstalled — we must not delete them.
-  rm -rf "${PREFIX:?}/lib/gcc" "${PREFIX}/libexec" \
-         "${PREFIX}/include/c++" "${PREFIX}/share"
-  # Remove old GCC binaries but keep binutils (as, ld, ar, etc.)
-  find "${PREFIX}/bin" -name "${TARGET}-gcc*" -delete 2>/dev/null || true
-  find "${PREFIX}/bin" -name "${TARGET}-g++*" -delete 2>/dev/null || true
-  find "${PREFIX}/bin" -name "${TARGET}-c++*" -delete 2>/dev/null || true
-  find "${PREFIX}/bin" -name "${TARGET}-cpp*" -delete 2>/dev/null || true
-  find "${PREFIX}/bin" -name "${TARGET}-gcov*" -delete 2>/dev/null || true
-  find "${PREFIX}/bin" -name "${TARGET}-lto*" -delete 2>/dev/null || true
+  if ! $DRY_RUN; then
+    rm -rf "${PREFIX:?}/lib/gcc" "${PREFIX}/libexec" \
+           "${PREFIX}/include/c++" "${PREFIX}/share"
+    find "${PREFIX}/bin" -name "${TARGET}-gcc*" -delete 2>/dev/null || true
+    find "${PREFIX}/bin" -name "${TARGET}-g++*" -delete 2>/dev/null || true
+    find "${PREFIX}/bin" -name "${TARGET}-c++*" -delete 2>/dev/null || true
+    find "${PREFIX}/bin" -name "${TARGET}-cpp*" -delete 2>/dev/null || true
+    find "${PREFIX}/bin" -name "${TARGET}-gcov*" -delete 2>/dev/null || true
+    find "${PREFIX}/bin" -name "${TARGET}-lto*" -delete 2>/dev/null || true
+  fi
 
-  rm -rf build-gcc-pgo-final
+  [[ -d build-gcc-pgo-final ]] && rm -rf build-gcc-pgo-final
   mkdir -p build-gcc-pgo-final && cd build-gcc-pgo-final
 
   _configure_gcc "gcc-src" "pass2-pgo-final" "${GCC_PASS2_FLAGS[@]}"
 
-  # -fprofile-use applies the collected profile data.
-  # -fprofile-correction handles slight mismatches from code changes.
-  # -Wno-missing-profile silences warnings for functions not profiled.
-  make BOOT_CFLAGS="-O2 -g0 -fprofile-use=${PROFILE_DIR} -fprofile-correction -Wno-missing-profile" \
+  run_log "gcc-pgo-final-make" make BOOT_CFLAGS="-O2 -g0 -fprofile-use=${PROFILE_DIR} -fprofile-correction -Wno-missing-profile" \
        BOOT_LDFLAGS="-fprofile-use=${PROFILE_DIR}" \
        all
 
-  make install
-
-  # Keep profile data for caching — do NOT delete pgo-profiles/
+  run_log "gcc-pgo-final-install" make install
 
   cd "${WORK_DIR}"
   ok "Phase 3 complete: PGO-optimised compiler installed  [$(elapsed)]"
@@ -694,11 +670,11 @@ _build_gcc_pass2_pgo() {
 # SUMMARY
 # ─────────────────────────────────────────────────────────────────
 print_summary() {
-  local gcc_hash_full=$(git -C gcc-src rev-parse HEAD 2>/dev/null || echo "unknown")
-  local gcc_hash_short=$(git -C gcc-src rev-parse --short HEAD 2>/dev/null || echo "unknown")
+  local gcc_hash_full; gcc_hash_full=$(git -C gcc-src rev-parse HEAD 2>/dev/null || echo "unknown")
+  local gcc_hash_short; gcc_hash_short=$(git -C gcc-src rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
-  local binutils_hash_full=$(git -C binutils-src rev-parse HEAD 2>/dev/null || echo "unknown")
-  local binutils_hash_short=$(git -C binutils-src rev-parse --short HEAD 2>/dev/null || echo "unknown")
+  local binutils_hash_full; binutils_hash_full=$(git -C binutils-src rev-parse HEAD 2>/dev/null || echo "unknown")
+  local binutils_hash_short; binutils_hash_short=$(git -C binutils-src rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
   local pgo_status="disabled"
   [[ "${ENABLE_PGO}" == "true" ]] && pgo_status="enabled"
