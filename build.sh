@@ -32,6 +32,18 @@ cleanup() {
 }
 trap cleanup EXIT ERR INT TERM
 
+safe_cd() {
+  if [ ! -d "$1" ]; then
+    if $DRY_RUN; then
+      log "[DRY-RUN] cd $1"
+      return 0
+    else
+      die "Directory $1 does not exist."
+    fi
+  fi
+  cd "$1"
+}
+
 run_log() {
   local stage_name="$1"
   shift
@@ -84,12 +96,20 @@ source "${SCRIPT_DIR}/.version-pins"
 # Sanitize environment
 unset CFLAGS CXXFLAGS LDFLAGS
 
+# Check for mold linker availability
+MOLD_FLAG=""
+if command -v mold &>/dev/null; then
+  MOLD_FLAG="-fuse-ld=mold"
+else
+  warn "mold linker not found, falling back to default linker."
+fi
+
 BUILD_CFLAGS="-O3 -pipe -march=x86-64-v3 -fomit-frame-pointer"
 BUILD_CXXFLAGS="-O3 -pipe -march=x86-64-v3 -fomit-frame-pointer"
 
 HOST_CFLAGS="-O3 -pipe -march=x86-64-v3 -fno-semantic-interposition -flto=auto -fno-fat-lto-objects -fipa-pta -fomit-frame-pointer"
 HOST_CXXFLAGS="-O3 -pipe -march=x86-64-v3 -fno-semantic-interposition -flto=auto -fno-fat-lto-objects -fipa-pta -fomit-frame-pointer"
-HOST_LDFLAGS="-Wl,-O1 -Wl,--as-needed -Wl,--sort-common -Wl,-z,relro -Wl,-z,now -fuse-ld=mold -flto=auto"
+HOST_LDFLAGS="-Wl,-O1 -Wl,--as-needed -Wl,--sort-common -Wl,-z,relro -Wl,-z,now ${MOLD_FLAG} -flto=auto"
 
 TARGET_CFLAGS="-O3 -pipe -fgraphite-identity -floop-nest-optimize -fno-semantic-interposition -fipa-pta -fstack-protector-strong -fstack-clash-protection -Wp,-D_FORTIFY_SOURCE=3 -ffunction-sections -fdata-sections -fomit-frame-pointer"
 TARGET_CXXFLAGS="-O3 -pipe -fgraphite-identity -floop-nest-optimize -fno-semantic-interposition -fipa-pta -fstack-protector-strong -fstack-clash-protection -Wp,-D_FORTIFY_SOURCE=3 -ffunction-sections -fdata-sections -fomit-frame-pointer"
@@ -353,8 +373,8 @@ build_binutils() {
   [[ -f "${WORK_DIR}/.stamp_binutils" ]] && { ok "Binutils already built [cached]"; return 0; }
 
   header "STAGE 1: BINUTILS"
-  cd "${WORK_DIR}"
-  mkdir -p build-binutils && cd build-binutils
+  safe_cd "${WORK_DIR}"
+  mkdir -p build-binutils && safe_cd build-binutils
 
   run_log "binutils-configure" ../binutils-src/configure \
       --target="${TARGET}" \
@@ -385,7 +405,7 @@ build_binutils() {
   if ! $DRY_RUN; then
     touch "${WORK_DIR}/.stamp_binutils"
   fi
-  cd "${WORK_DIR}"
+  safe_cd "${WORK_DIR}"
   ok "Binutils done  [$(elapsed)]"
 }
 
@@ -396,7 +416,7 @@ build_linux_headers() {
   [[ -f "${WORK_DIR}/.stamp_linux_headers" ]] && { ok "Linux headers already installed [cached]"; return 0; }
 
   header "STAGE 2: LINUX KERNEL HEADERS"
-  cd "${WORK_DIR}/linux-${LINUX_VER}"
+  safe_cd "${WORK_DIR}/linux-${LINUX_VER}"
 
   run_log "linux-headers" make ARCH="${KERNEL_ARCH}" \
        INSTALL_HDR_PATH="${SYSROOT}/usr" \
@@ -405,7 +425,7 @@ build_linux_headers() {
   if ! $DRY_RUN; then
     touch "${WORK_DIR}/.stamp_linux_headers"
   fi
-  cd "${WORK_DIR}"
+  safe_cd "${WORK_DIR}"
   ok "Linux headers done  [$(elapsed)]"
 }
 
@@ -464,8 +484,8 @@ build_gcc_pass1() {
   [[ -f "${WORK_DIR}/.stamp_gcc_pass1" ]] && { ok "GCC Pass 1 already built [cached]"; return 0; }
 
   header "STAGE 3: GCC PASS 1 (BOOTSTRAP C COMPILER)"
-  cd "${WORK_DIR}"
-  mkdir -p build-gcc-pass1 && cd build-gcc-pass1
+  safe_cd "${WORK_DIR}"
+  mkdir -p build-gcc-pass1 && safe_cd build-gcc-pass1
 
   _configure_gcc "gcc-src" "pass1" \
       --without-headers \
@@ -486,7 +506,7 @@ build_gcc_pass1() {
   if ! $DRY_RUN; then
     touch "${WORK_DIR}/.stamp_gcc_pass1"
   fi
-  cd "${WORK_DIR}"
+  safe_cd "${WORK_DIR}"
   ok "GCC Pass 1 done  [$(elapsed)]"
 }
 
@@ -497,8 +517,8 @@ build_glibc() {
   [[ -f "${WORK_DIR}/.stamp_glibc" ]] && { ok "Glibc already built [cached]"; return 0; }
 
   header "STAGE 4: GLIBC"
-  cd "${WORK_DIR}"
-  mkdir -p build-glibc && cd build-glibc
+  safe_cd "${WORK_DIR}"
+  mkdir -p build-glibc && safe_cd build-glibc
 
   run_log "glibc-configure" ../glibc-${GLIBC_VER}/configure \
       --host="${TARGET}" \
@@ -534,7 +554,7 @@ build_glibc() {
   if ! $DRY_RUN; then
     touch "${WORK_DIR}/.stamp_glibc"
   fi
-  cd "${WORK_DIR}"
+  safe_cd "${WORK_DIR}"
   ok "Glibc done  [$(elapsed)]"
 }
 
@@ -568,15 +588,15 @@ build_gcc_pass2() {
 
 _build_gcc_pass2_standard() {
   header "STAGE 5: GCC PASS 2 (FINAL COMPILER)"
-  cd "${WORK_DIR}"
-  mkdir -p build-gcc-pass2 && cd build-gcc-pass2
+  safe_cd "${WORK_DIR}"
+  mkdir -p build-gcc-pass2 && safe_cd build-gcc-pass2
 
   _configure_gcc "gcc-src" "pass2" "${GCC_PASS2_FLAGS[@]}"
 
   run_log "gcc-pass2-make" make all
   run_log "gcc-pass2-install" make install
 
-  cd "${WORK_DIR}"
+  safe_cd "${WORK_DIR}"
   ok "GCC Pass 2 done  [$(elapsed)]"
 }
 
@@ -604,9 +624,9 @@ _build_gcc_pass2_pgo() {
 
     # ── Phase 1: Build instrumented compiler ──────────────────────
     log "Phase 1/3: Building instrumented compiler..."
-    cd "${WORK_DIR}"
+    safe_cd "${WORK_DIR}"
     [[ -d build-gcc-pgo-instr ]] && rm -rf build-gcc-pgo-instr
-    mkdir -p build-gcc-pgo-instr && cd build-gcc-pgo-instr
+    mkdir -p build-gcc-pgo-instr && safe_cd build-gcc-pgo-instr
 
     _configure_gcc "gcc-src" "pass2-pgo-instr" "${GCC_PASS2_FLAGS[@]}"
 
@@ -620,7 +640,7 @@ _build_gcc_pass2_pgo() {
 
     # ── Phase 2: Training run — compile a kernel ──────────────────
     log "Phase 2/3: Training on kernel compilation..."
-    cd "${WORK_DIR}/linux-${LINUX_VER}"
+    safe_cd "${WORK_DIR}/linux-${LINUX_VER}"
 
     run_log "pgo-kernel-mrproper" make ARCH="${KERNEL_ARCH}" mrproper
     run_log "pgo-kernel-defconfig" make ARCH="${KERNEL_ARCH}" CROSS_COMPILE="${TARGET}-" defconfig
@@ -645,7 +665,7 @@ _build_gcc_pass2_pgo() {
 
   # ── Phase 3: Rebuild with collected profiles ──────────────────
   log "Phase 3/3: Rebuilding compiler with profile data..."
-  cd "${WORK_DIR}"
+  safe_cd "${WORK_DIR}"
 
   if ! $DRY_RUN; then
     rm -rf "${PREFIX:?}/lib/gcc" "${PREFIX}/libexec" \
@@ -659,7 +679,7 @@ _build_gcc_pass2_pgo() {
   fi
 
   [[ -d build-gcc-pgo-final ]] && rm -rf build-gcc-pgo-final
-  mkdir -p build-gcc-pgo-final && cd build-gcc-pgo-final
+  mkdir -p build-gcc-pgo-final && safe_cd build-gcc-pgo-final
 
   _configure_gcc "gcc-src" "pass2-pgo-final" "${GCC_PASS2_FLAGS[@]}"
 
@@ -669,7 +689,7 @@ _build_gcc_pass2_pgo() {
 
   run_log "gcc-pgo-final-install" make install
 
-  cd "${WORK_DIR}"
+  safe_cd "${WORK_DIR}"
   ok "Phase 3 complete: PGO-optimised compiler installed  [$(elapsed)]"
 }
 
