@@ -17,11 +17,12 @@ log "Target directory: ${CUR_DIR}"
 X86S=$(command -v strip || true)
 A64S="${CUR_DIR}/bin/aarch64-linux-gnu-strip"
 A32S="${CUR_DIR}/bin/arm-linux-gnueabihf-strip"
+A64O="${CUR_DIR}/bin/aarch64-linux-gnu-objcopy"
+A32O="${CUR_DIR}/bin/arm-linux-gnueabihf-objcopy"
 
 # Target specific debug sections to remove, but explicitly spare .debug_frame
 # to ensure basic stack unwinding remains functional.
-STRIP_FLAGS=(
-    --strip-unneeded
+SECTION_FLAGS=(
     --remove-section=.comment
     --remove-section=.note
     --remove-section=.debug_info
@@ -37,24 +38,21 @@ STRIP_FLAGS=(
     --remove-section=.debug_loclists
 )
 
-# Helper to check ELF machine type using readelf
-# Machine codes: 62 = x86-64, 183 = AArch64, 40 = ARM
-get_elf_machine() {
-    local file="$1"
-    readelf -h "${file}" 2>/dev/null | awk '/Machine:/ {print $2}' || echo "unknown"
-}
+STRIP_FLAGS=(
+    --strip-unneeded
+    "${SECTION_FLAGS[@]}"
+)
 
-# Safely strip binaries in parallel
-strip_files() {
+# Strip host tools and shared objects by ELF machine.
+strip_elf_files() {
     local tool="$1"
     local machine_pattern="$2"
     local jobs; jobs=$(nproc 2>/dev/null || echo 4)
 
-    log "Searching for binaries (Machine: ${machine_pattern}) using ${tool}..."
-    
-    # Use find to get candidates, then filter and strip.
-    # We use positional parameters ($1) in bash -c to safely handle filenames.
-    find "${CUR_DIR}" -type f -executable -print0 | xargs -0 -P "${jobs}" -n1 bash -c '
+    log "Stripping ELF binaries (Machine: ${machine_pattern}) with ${tool}..."
+
+    find "${CUR_DIR}" -type f \( -executable -o -name "*.so" -o -name "*.so.*" \) \
+        -print0 | xargs -0 -P "${jobs}" -n1 bash -c '
         file="$1"; tool="$2"; pattern="$3"; shift 3; flags=("$@")
         if readelf -h "$file" 2>/dev/null | grep -iq "Machine:.*$pattern"; then
             "$tool" "${flags[@]}" "$file" 2>/dev/null || true
@@ -62,24 +60,50 @@ strip_files() {
     ' _ {} "${tool}" "${machine_pattern}" "${STRIP_FLAGS[@]}" || true
 }
 
+# Strip target static libraries and object files in sysroot.
+strip_target_runtime_artifacts() {
+    local objcopy_tool="$1"
+    local target="$2"
+    local jobs; jobs=$(nproc 2>/dev/null || echo 4)
+    local sysroot_dir="${CUR_DIR}/${target}/sysroot"
+
+    if [[ ! -d "${sysroot_dir}" ]]; then
+        warn "Sysroot not found for ${target}. Skipping runtime library stripping."
+        return 0
+    fi
+
+    log "Stripping target runtime artifacts in ${sysroot_dir} with ${objcopy_tool}..."
+    find "${sysroot_dir}" -type f \( -name "*.a" -o -name "*.o" \) -print0 | \
+        xargs -0 -P "${jobs}" -n1 bash -c '
+            file="$1"; objcopy="$2"; shift 2; flags=("$@")
+            "$objcopy" "${flags[@]}" "$file" 2>/dev/null || true
+        ' _ {} "${objcopy_tool}" "${SECTION_FLAGS[@]}" || true
+}
+
 if [[ -n "${X86S}" && -x "${X86S}" ]]; then
-    # Machine code for x86-64 is Advanced Micro Devices X86-64 (or similar)
-    # We check for X86-64
-    strip_files "${X86S}" "X86-64"
+    strip_elf_files "${X86S}" "X86-64"
 else
     warn "Stripper for x86 not found. Skipping."
 fi
 
 if [[ -n "${A64S}" && -x "${A64S}" ]]; then
-    # Machine code for AArch64 is AArch64
-    strip_files "${A64S}" "AArch64"
+    strip_elf_files "${A64S}" "AArch64"
+    if [[ -x "${A64O}" ]]; then
+        strip_target_runtime_artifacts "${A64O}" "aarch64-linux-gnu"
+    else
+        warn "Objcopy for aarch64 not found. Skipping target archive/object stripping."
+    fi
 else
     warn "Stripper for aarch64 not found. Skipping."
 fi
 
 if [[ -n "${A32S}" && -x "${A32S}" ]]; then
-    # Machine code for ARM is ARM
-    strip_files "${A32S}" "ARM"
+    strip_elf_files "${A32S}" "ARM"
+    if [[ -x "${A32O}" ]]; then
+        strip_target_runtime_artifacts "${A32O}" "arm-linux-gnueabihf"
+    else
+        warn "Objcopy for arm32 not found. Skipping target archive/object stripping."
+    fi
 else
     warn "Stripper for arm32 not found. Skipping."
 fi
