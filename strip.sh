@@ -47,16 +47,19 @@ get_elf_machine() {
 # Safely strip binaries in parallel
 strip_files() {
     local tool="$1"
-    local machine_code="$2"
-    local jobs; jobs=$(nproc)
+    local machine_pattern="$2"
+    local jobs; jobs=$(nproc 2>/dev/null || echo 4)
 
-    log "Searching for binaries (Machine: ${machine_code}) using ${tool}..."
+    log "Searching for binaries (Machine: ${machine_pattern}) using ${tool}..."
     
-    find "${CUR_DIR}" -type f -executable -print0 | xargs -0 -P "${jobs}" -I {} bash -c "
-        if [[ \"\$(readelf -h '{}' 2>/dev/null | awk '/Machine:/ {print \$NF}')\" == \"${machine_code}\" ]]; then
-            \"${tool}\" ${STRIP_FLAGS[*]} '{}' 2>/dev/null
+    # Use find to get candidates, then filter and strip.
+    # We use positional parameters ($1) in bash -c to safely handle filenames.
+    find "${CUR_DIR}" -type f -executable -print0 | xargs -0 -P "${jobs}" -n1 bash -c '
+        file="$1"; tool="$2"; pattern="$3"; shift 3; flags=("$@")
+        if readelf -h "$file" 2>/dev/null | grep -iq "Machine:.*$pattern"; then
+            "$tool" "${flags[@]}" "$file" 2>/dev/null || true
         fi
-    "
+    ' _ {} "${tool}" "${machine_pattern}" "${STRIP_FLAGS[@]}" || true
 }
 
 if [[ -n "${X86S}" && -x "${X86S}" ]]; then
