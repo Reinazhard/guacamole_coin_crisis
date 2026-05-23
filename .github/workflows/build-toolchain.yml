@@ -2,13 +2,7 @@ name: Build Toolchain
 
 on:
   push:
-    branches:
-      - '**'
-    tags:
-      - '**'
   pull_request:
-    branches:
-      - '**'
   schedule:
     - cron: '0 0 1 * *' # Matches the schedule pipeline trigger
   workflow_dispatch:
@@ -27,6 +21,8 @@ jobs:
     container:
       image: archlinux:base-devel
     timeout-minutes: 360 # 6 hours timeout
+    env:
+      DISABLE_PGO: ${{ github.event.inputs.disable_pgo || 'false' }}
     strategy:
       fail-fast: false
       matrix:
@@ -52,7 +48,7 @@ jobs:
           key: sources-${{ hashFiles('.version-pins') }}
 
       - name: Cache PGO profiles
-        if: inputs.disable_pgo != true
+        if: env.DISABLE_PGO != 'true'
         uses: actions/cache@v4
         with:
           path: pgo-profiles
@@ -60,7 +56,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pacman -Syu --noconfirm base-devel git bison flex texinfo gawk curl tar xz file ncurses python glibc automake autoconf pkgconf gettext rsync zstd cpio kmod bc patch libtool wget gmp mpfr libmpc isl zlib gperf expat openssl mold ccache
+          pacman -Syu --noconfirm base-devel git curl tar xz ncurses python rsync zstd cpio kmod bc wget gmp mpfr libmpc isl zlib gperf expat openssl mold ccache
 
       - name: Setup ccache
         uses: actions/cache@v4
@@ -104,7 +100,7 @@ jobs:
 
       - name: Build Stage 5 (GCC Pass 2)
         run: |
-          if [ "${{ inputs.disable_pgo }}" = "true" ]; then
+          if [ "${{ env.DISABLE_PGO }}" = "true" ]; then
             bash build.sh -a "${{ matrix.arch }}" -n build_gcc_pass2
           else
             bash build.sh -a "${{ matrix.arch }}" build_gcc_pass2

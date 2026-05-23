@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0
-
+#
 set -euo pipefail
 
 # ── Colour helpers ────────────────────────────────────────────────
@@ -11,14 +11,14 @@ warn() { echo -e "${YELLOW}[WARN]${RESET}  $*"; }
 ok()   { echo -e "${GREEN}[DONE]${RESET}  $*"; }
 
 CUR_DIR="${1:-$(pwd)}"
+if [[ ! -d "${CUR_DIR}" ]]; then
+    echo -e "${YELLOW}[FAIL]${RESET}  Target directory does not exist: ${CUR_DIR}" >&2
+    exit 1
+fi
 log "Target directory: ${CUR_DIR}"
 
 # Use the cross-compiler's own strip utilities from the toolchain we just built.
 X86S=$(command -v strip || true)
-A64S="${CUR_DIR}/bin/aarch64-linux-gnu-strip"
-A32S="${CUR_DIR}/bin/arm-linux-gnueabihf-strip"
-A64O="${CUR_DIR}/bin/aarch64-linux-gnu-objcopy"
-A32O="${CUR_DIR}/bin/arm-linux-gnueabihf-objcopy"
 
 # Target specific debug sections to remove, but explicitly spare .debug_frame
 # to ensure basic stack unwinding remains functional.
@@ -80,32 +80,35 @@ strip_target_runtime_artifacts() {
         ' _ {} "${objcopy_tool}" "${SECTION_FLAGS[@]}" || true
 }
 
+# Strip an architecture target toolchain and sysroot.
+strip_arch_target() {
+    local arch_name="$1"      # e.g., "aarch64" or "arm32"
+    local machine_pat="$2"    # e.g., "AArch64" or "ARM"
+    local target_triple="$3"  # e.g., "aarch64-linux-gnu" or "arm-linux-gnueabihf"
+    local strip_bin="${CUR_DIR}/bin/${target_triple}-strip"
+    local objcopy_bin="${CUR_DIR}/bin/${target_triple}-objcopy"
+
+    if [[ -n "${strip_bin}" && -x "${strip_bin}" ]]; then
+        strip_elf_files "${strip_bin}" "${machine_pat}"
+        if [[ -x "${objcopy_bin}" ]]; then
+            strip_target_runtime_artifacts "${objcopy_bin}" "${target_triple}"
+        else
+            warn "Objcopy for ${arch_name} not found. Skipping target archive/object stripping."
+        fi
+    else
+        warn "Stripper for ${arch_name} not found. Skipping."
+    fi
+}
+
+# ── Strip host tools and target assets ─────────────────────────────
+
 if [[ -n "${X86S}" && -x "${X86S}" ]]; then
     strip_elf_files "${X86S}" "X86-64"
 else
     warn "Stripper for x86 not found. Skipping."
 fi
 
-if [[ -n "${A64S}" && -x "${A64S}" ]]; then
-    strip_elf_files "${A64S}" "AArch64"
-    if [[ -x "${A64O}" ]]; then
-        strip_target_runtime_artifacts "${A64O}" "aarch64-linux-gnu"
-    else
-        warn "Objcopy for aarch64 not found. Skipping target archive/object stripping."
-    fi
-else
-    warn "Stripper for aarch64 not found. Skipping."
-fi
-
-if [[ -n "${A32S}" && -x "${A32S}" ]]; then
-    strip_elf_files "${A32S}" "ARM"
-    if [[ -x "${A32O}" ]]; then
-        strip_target_runtime_artifacts "${A32O}" "arm-linux-gnueabihf"
-    else
-        warn "Objcopy for arm32 not found. Skipping target archive/object stripping."
-    fi
-else
-    warn "Stripper for arm32 not found. Skipping."
-fi
+strip_arch_target "aarch64" "AArch64" "aarch64-linux-gnu"
+strip_arch_target "arm32" "ARM" "arm-linux-gnueabihf"
 
 ok "Stripping process completed."

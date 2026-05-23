@@ -276,9 +276,10 @@ fetch() {
   if [[ ! -f "sources/${file}" ]]; then
     log "Downloading ${file}..."
     if ! $DRY_RUN; then
-      curl -fL --retry 5 --retry-delay 3 -o "sources/${file}" "${url}"
+      curl -fL --retry 5 --retry-delay 3 -o "sources/${file}.tmp" "${url}"
+      mv "sources/${file}.tmp" "sources/${file}"
     else
-      log "[DRY-RUN] curl -fL ... -o sources/${file} ${url}"
+      log "[DRY-RUN] curl -fL ... -o sources/${file}.tmp ${url} && mv sources/${file}.tmp sources/${file}"
     fi
   else
     ok "Cached ${file}"
@@ -670,12 +671,17 @@ _build_gcc_pass2_pgo() {
   if ! $DRY_RUN; then
     rm -rf "${PREFIX:?}/lib/gcc" "${PREFIX}/libexec" \
            "${PREFIX}/include/c++" "${PREFIX}/share"
-    find "${PREFIX}/bin" -name "${TARGET}-gcc*" -delete 2>/dev/null || true
-    find "${PREFIX}/bin" -name "${TARGET}-g++*" -delete 2>/dev/null || true
-    find "${PREFIX}/bin" -name "${TARGET}-c++*" -delete 2>/dev/null || true
-    find "${PREFIX}/bin" -name "${TARGET}-cpp*" -delete 2>/dev/null || true
-    find "${PREFIX}/bin" -name "${TARGET}-gcov*" -delete 2>/dev/null || true
-    find "${PREFIX}/bin" -name "${TARGET}-lto*" -delete 2>/dev/null || true
+    local prefix_bin="${PREFIX}/bin"
+    if [[ -d "${prefix_bin}" ]]; then
+      find "${prefix_bin}" -type f \( \
+        -name "${TARGET}-gcc*" -o \
+        -name "${TARGET}-g++*" -o \
+        -name "${TARGET}-c++*" -o \
+        -name "${TARGET}-cpp*" -o \
+        -name "${TARGET}-gcov*" -o \
+        -name "${TARGET}-lto*" \
+      \) -delete 2>/dev/null || true
+    fi
   fi
 
   [[ -d build-gcc-pgo-final ]] && rm -rf build-gcc-pgo-final
