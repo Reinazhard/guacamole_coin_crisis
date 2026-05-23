@@ -107,8 +107,8 @@ fi
 BUILD_CFLAGS="-O3 -pipe -march=x86-64-v3 -fomit-frame-pointer"
 BUILD_CXXFLAGS="-O3 -pipe -march=x86-64-v3 -fomit-frame-pointer"
 
-HOST_CFLAGS="-O3 -pipe -march=x86-64-v3 -fno-semantic-interposition -flto=auto -fno-fat-lto-objects -fipa-pta -fomit-frame-pointer"
-HOST_CXXFLAGS="-O3 -pipe -march=x86-64-v3 -fno-semantic-interposition -flto=auto -fno-fat-lto-objects -fipa-pta -fomit-frame-pointer"
+HOST_CFLAGS="-O3 -pipe -march=x86-64-v3 -fno-semantic-interposition -flto=auto -fno-fat-lto-objects -fipa-pta -fno-plt -falign-functions=32 -fomit-frame-pointer"
+HOST_CXXFLAGS="-O3 -pipe -march=x86-64-v3 -fno-semantic-interposition -flto=auto -fno-fat-lto-objects -fipa-pta -fno-plt -falign-functions=32 -fomit-frame-pointer"
 HOST_LDFLAGS="-Wl,-O1 -Wl,--as-needed -Wl,--sort-common -Wl,-z,relro -Wl,-z,now ${MOLD_FLAG} -flto=auto"
 
 TARGET_CFLAGS="-O3 -pipe -fgraphite-identity -floop-nest-optimize -fno-semantic-interposition -fipa-pta -fstack-protector-strong -fstack-clash-protection -Wp,-D_FORTIFY_SOURCE=3 -ffunction-sections -fdata-sections -fomit-frame-pointer"
@@ -648,7 +648,7 @@ _build_gcc_pass2_pgo() {
 
     log "Compiling kernel for PGO training (this takes a while)..."
     # Allow failure during training as partial profiles are still useful
-    run_log "pgo-kernel-make" make ARCH="${KERNEL_ARCH}" CROSS_COMPILE="${TARGET}-" -j${JOBS} || true
+    run_log "pgo-kernel-make" make ARCH="${KERNEL_ARCH}" CROSS_COMPILE="${TARGET}-" -j${JOBS} all || true
 
     run_log "pgo-kernel-clean" make ARCH="${KERNEL_ARCH}" mrproper
 
