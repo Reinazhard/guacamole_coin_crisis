@@ -39,13 +39,13 @@ jobs:
             binutils-src
             mold-src
             sources/
-          key: sources-${{ hashFiles('.version-pins') }}
+          key: sources-${{ github.event_name == 'schedule' && github.run_id || hashFiles('.version-pins') }}
 
       - name: Cache PGO profiles
         uses: actions/cache@v4
         with:
           path: pgo-profiles
-          key: pgo-${{ matrix.arch }}-${{ hashFiles('.version-pins') }}
+          key: pgo-${{ matrix.arch }}-${{ github.event_name == 'schedule' && github.run_id || hashFiles('.version-pins') }}
 
       - name: Install dependencies
         run: |
@@ -74,7 +74,9 @@ jobs:
             build-binutils
             build-glibc
             build-gcc-pass1
-          key: build-${{ matrix.arch }}-${{ hashFiles('.version-pins') }}
+          key: build-${{ matrix.arch }}-${{ github.event_name == 'schedule' && github.run_id || hashFiles('.version-pins', 'build.sh', '.github/workflows/build-toolchain.yml') }}
+          restore-keys: |
+            ${{ github.event_name != 'schedule' && format('build-{0}-', matrix.arch) || '' }}
 
       - name: Download & Extract Sources
         run: bash build.sh -a "${{ matrix.arch }}" download_resources
