@@ -579,32 +579,7 @@ GCC_PASS2_FLAGS=(
 build_gcc_pass2() {
   [[ -f "${WORK_DIR}/.stamp_gcc_pass2" ]] && { ok "GCC Pass 2 already built [cached]"; return 0; }
 
-  _build_gcc_pass2_pgo
-
-  if ! $DRY_RUN; then
-    touch "${WORK_DIR}/.stamp_gcc_pass2"
-  fi
-}
-
-_build_gcc_pass2_standard() {
-  header "STAGE 5: GCC PASS 2 (FINAL COMPILER)"
-  safe_cd "${WORK_DIR}"
-  mkdir -p build-gcc-pass2 && safe_cd build-gcc-pass2
-
-  _configure_gcc "gcc-src" "pass2" "${GCC_PASS2_FLAGS[@]}"
-
-  run_log "gcc-pass2-make" make all
-  run_log "gcc-pass2-install" make install
-
-  safe_cd "${WORK_DIR}"
-  ok "GCC Pass 2 done  [$(elapsed)]"
-}
-
-# ─────────────────────────────────────────────────────────────────
-# GCC PASS 2 (PGO VARIANT)
-# ─────────────────────────────────────────────────────────────────
-_build_gcc_pass2_pgo() {
-  header "STAGE 5: GCC PASS 2 (KERNEL-OPTIMISED PGO)"
+  header "STAGE 5: GCC PASS 2 (PGO COMPILER)"
 
   local PROFILE_DIR="${WORK_DIR}/pgo-profiles"
   local profile_count=0
@@ -658,7 +633,7 @@ _build_gcc_pass2_pgo() {
     if (( profile_count == 0 )) && ! $DRY_RUN; then
       warn "No profile data found! Falling back to standard build."
       ENABLE_PGO=false
-      _build_gcc_pass2_standard
+      _build_gcc_pass2_fallback
       return
     fi
     log "Collected ${profile_count} profile files"
@@ -695,8 +670,28 @@ _build_gcc_pass2_pgo() {
   run_log "gcc-pgo-final-make" make all
   run_log "gcc-pgo-final-install" make install
 
+  if ! $DRY_RUN; then
+    touch "${WORK_DIR}/.stamp_gcc_pass2"
+  fi
   safe_cd "${WORK_DIR}"
   ok "Phase 3 complete: PGO-optimised compiler installed  [$(elapsed)]"
+}
+
+_build_gcc_pass2_fallback() {
+  header "STAGE 5: GCC PASS 2 (FALLBACK COMPILER)"
+  safe_cd "${WORK_DIR}"
+  mkdir -p build-gcc-pass2 && safe_cd build-gcc-pass2
+
+  _configure_gcc "gcc-src" "pass2" "${GCC_PASS2_FLAGS[@]}"
+
+  run_log "gcc-pass2-make" make all
+  run_log "gcc-pass2-install" make install
+
+  if ! $DRY_RUN; then
+    touch "${WORK_DIR}/.stamp_gcc_pass2"
+  fi
+  safe_cd "${WORK_DIR}"
+  ok "GCC Pass 2 done (standard fallback)  [$(elapsed)]"
 }
 
 # ─────────────────────────────────────────────────────────────────
