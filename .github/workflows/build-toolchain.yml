@@ -44,6 +44,7 @@ jobs:
           path: |
             gcc-src
             binutils-src
+            mold-src
             sources/
           key: sources-${{ hashFiles('.version-pins') }}
 
@@ -56,7 +57,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pacman -Syu --noconfirm base-devel git curl tar xz ncurses python rsync zstd cpio kmod bc wget gmp mpfr libmpc isl zlib gperf expat openssl mold ccache
+          pacman -Syu --noconfirm base-devel git curl tar xz ncurses python rsync zstd cpio kmod bc wget gmp mpfr libmpc isl zlib gperf expat openssl mold ccache cmake
 
       - name: Setup ccache
         uses: actions/cache@v4
@@ -105,6 +106,9 @@ jobs:
           else
             bash build.sh -a "${{ matrix.arch }}" build_gcc_pass2
           fi
+
+      - name: Build Stage 6 (Mold Linker)
+        run: bash build.sh -a "${{ matrix.arch }}" install_mold
 
       - name: Print Summary
         run: |

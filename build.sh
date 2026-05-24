@@ -231,7 +231,7 @@ _print_startup_info() {
 # ─────────────────────────────────────────────────────────────────
 check_deps() {
   local missing=()
-  for cmd in gcc g++ make bison flex makeinfo gawk curl tar xz git zstd mold; do
+  for cmd in gcc g++ make bison flex makeinfo gawk curl tar xz git zstd mold cmake; do
     command -v "$cmd" &>/dev/null || missing+=("$cmd")
   done
   
@@ -700,6 +700,47 @@ _build_gcc_pass2_pgo() {
 }
 
 # ─────────────────────────────────────────────────────────────────
+# STAGE 6: MOLD LINKER
+# ─────────────────────────────────────────────────────────────────
+install_mold() {
+  [[ -f "${WORK_DIR}/.stamp_mold" ]] && { ok "Mold already installed [cached]"; return 0; }
+
+  header "STAGE 6: MOLD LINKER"
+
+  # Clone or update mold source
+  if [[ ! -d "mold-src" ]]; then
+    log "Cloning mold (branch: ${MOLD_BRANCH})..."
+    if $DRY_RUN; then
+      log "[DRY-RUN] git clone --depth=1 --branch=${MOLD_BRANCH} ..."
+    else
+      git clone --depth=1 --branch="${MOLD_BRANCH}" \
+        https://github.com/rui314/mold.git mold-src
+    fi
+  fi
+
+  safe_cd "${WORK_DIR}"
+  [[ -d build-mold ]] && rm -rf build-mold
+
+  run_log "mold-cmake" cmake -B build-mold -S mold-src \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
+    -DMOLD_MOSTLY_STATIC=ON
+
+  run_log "mold-build" cmake --build build-mold -j${JOBS}
+  run_log "mold-install" cmake --install build-mold
+
+  # Create symlinks for GCC -fuse-ld=mold lookup
+  if ! $DRY_RUN; then
+    ln -sfn mold "${PREFIX}/bin/ld.mold"
+    ln -sfn ld.mold "${PREFIX}/bin/${TARGET}-ld.mold"
+    touch "${WORK_DIR}/.stamp_mold"
+  fi
+
+  safe_cd "${WORK_DIR}"
+  ok "Mold linker installed  [$(elapsed)]"
+}
+
+# ─────────────────────────────────────────────────────────────────
 # SUMMARY
 # ─────────────────────────────────────────────────────────────────
 print_summary() {
@@ -708,6 +749,8 @@ print_summary() {
 
   local binutils_hash_full; binutils_hash_full=$(git -C binutils-src rev-parse HEAD 2>/dev/null || echo "unknown")
   local binutils_hash_short; binutils_hash_short=$(git -C binutils-src rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+  local mold_hash_short; mold_hash_short=$(git -C mold-src rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
   local pgo_status="disabled"
   [[ "${ENABLE_PGO}" == "true" ]] && pgo_status="enabled"
@@ -735,6 +778,7 @@ print_summary() {
   printf "${BOLD}║${RESET}  %-20s %-34s ${BOLD}║${RESET}\n" "Binutils commit:"  "$(_fmt "${binutils_hash_short} (${binutils_hash_full:0:16}...)")"
   printf "${BOLD}║${RESET}  %-20s %-34s ${BOLD}║${RESET}\n" "Glibc version:"    "$(_fmt "${GLIBC_VER}")"
   printf "${BOLD}║${RESET}  %-20s %-34s ${BOLD}║${RESET}\n" "Linux headers:"    "$(_fmt "${LINUX_VER}")"
+  printf "${BOLD}║${RESET}  %-20s %-34s ${BOLD}║${RESET}\n" "Mold commit:"      "$(_fmt "${mold_hash_short}")"
   printf "${BOLD}║${RESET}  %-20s %-34s ${BOLD}║${RESET}\n" "PGO training:"     "$(_fmt "${pgo_status}")"
   printf "${BOLD}║${RESET}  %-20s %-34s ${BOLD}║${RESET}\n" "Total build time:" "$(_fmt "$(elapsed)")"
   echo -e "${BOLD}╚══════════════════════════════════════════════════════════╝${RESET}"
@@ -746,6 +790,9 @@ print_summary() {
       log "  ${tool}: $(${bin} --version | head -n1)"
     fi
   done
+  if [[ -x "${PREFIX}/bin/mold" ]]; then
+    log "  mold: $(${PREFIX}/bin/mold --version | head -n1)"
+  fi
   echo
 }
 
@@ -765,6 +812,7 @@ if [[ "${STAGES[0]}" == "all" ]]; then
   build_gcc_pass1
   build_glibc
   build_gcc_pass2
+  install_mold
   print_summary
 else
   for stage in "${STAGES[@]}"; do
