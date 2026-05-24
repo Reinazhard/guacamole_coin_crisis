@@ -628,12 +628,12 @@ _build_gcc_pass2_pgo() {
     [[ -d build-gcc-pgo-instr ]] && rm -rf build-gcc-pgo-instr
     mkdir -p build-gcc-pgo-instr && safe_cd build-gcc-pgo-instr
 
-    _configure_gcc "gcc-src" "pass2-pgo-instr" "${GCC_PASS2_FLAGS[@]}"
+    _configure_gcc "gcc-src" "pass2-pgo-instr" "${GCC_PASS2_FLAGS[@]}" \
+        CFLAGS="${HOST_CFLAGS} -fprofile-generate=${PROFILE_DIR}" \
+        CXXFLAGS="${HOST_CXXFLAGS} -fprofile-generate=${PROFILE_DIR}" \
+        LDFLAGS="-static-libstdc++ -static-libgcc ${HOST_LDFLAGS} -fprofile-generate=${PROFILE_DIR}"
 
-    run_log "gcc-pgo-instr-make" make BOOT_CFLAGS="-O2 -g0 -fprofile-generate=${PROFILE_DIR}" \
-         BOOT_LDFLAGS="-fprofile-generate=${PROFILE_DIR}" \
-         all
-
+    run_log "gcc-pgo-instr-make" make all
     run_log "gcc-pgo-instr-install" make install
 
     ok "Phase 1 complete: instrumented compiler installed  [$(elapsed)]"
@@ -687,12 +687,12 @@ _build_gcc_pass2_pgo() {
   [[ -d build-gcc-pgo-final ]] && rm -rf build-gcc-pgo-final
   mkdir -p build-gcc-pgo-final && safe_cd build-gcc-pgo-final
 
-  _configure_gcc "gcc-src" "pass2-pgo-final" "${GCC_PASS2_FLAGS[@]}"
+  _configure_gcc "gcc-src" "pass2-pgo-final" "${GCC_PASS2_FLAGS[@]}" \
+      CFLAGS="${HOST_CFLAGS} -fprofile-use=${PROFILE_DIR} -fprofile-correction -Wno-missing-profile" \
+      CXXFLAGS="${HOST_CXXFLAGS} -fprofile-use=${PROFILE_DIR} -fprofile-correction -Wno-missing-profile" \
+      LDFLAGS="-static-libstdc++ -static-libgcc ${HOST_LDFLAGS} -fprofile-use=${PROFILE_DIR}"
 
-  run_log "gcc-pgo-final-make" make BOOT_CFLAGS="-O2 -g0 -fprofile-use=${PROFILE_DIR} -fprofile-correction -Wno-missing-profile" \
-       BOOT_LDFLAGS="-fprofile-use=${PROFILE_DIR}" \
-       all
-
+  run_log "gcc-pgo-final-make" make all
   run_log "gcc-pgo-final-install" make install
 
   safe_cd "${WORK_DIR}"
