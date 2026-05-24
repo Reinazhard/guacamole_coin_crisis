@@ -31,22 +31,6 @@ jobs:
         with:
           fetch-depth: 1 # Shallow clone
 
-      - name: Cache sources
-        uses: actions/cache@v4
-        with:
-          path: |
-            gcc-src
-            binutils-src
-            mold-src
-            sources/
-          key: sources-${{ github.event_name == 'schedule' && github.run_id || hashFiles('.version-pins') }}
-
-      - name: Cache PGO profiles
-        uses: actions/cache@v4
-        with:
-          path: pgo-profiles
-          key: pgo-${{ matrix.arch }}-${{ github.event_name == 'schedule' && github.run_id || hashFiles('.version-pins') }}
-
       - name: Configure Pacman parallel downloads
         run: |
           echo "--- Configuring Pacman parallel downloads ---"
@@ -54,34 +38,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pacman -Syu --needed --noconfirm base-devel git curl tar xz ncurses python rsync zstd cpio kmod bc wget gmp mpfr libmpc isl zlib gperf expat openssl mold ccache cmake
-
-      - name: Setup ccache
-        uses: actions/cache@v4
-        with:
-          path: ~/.ccache
-          key: ccache-${{ matrix.arch }}-${{ github.sha }}
-          restore-keys: |
-            ccache-${{ matrix.arch }}-
-
-      - name: Configure ccache
-        run: |
-          ccache --set-config=max_size=2G
-          ccache --set-config=compression=true
-          echo "/usr/lib/ccache/bin" >> $GITHUB_PATH
-
-      - name: Cache build stages
-        uses: actions/cache@v4
-        with:
-          path: |
-            gcc-${{ matrix.arch }}
-            .stamp_*
-            build-binutils
-            build-glibc
-            build-gcc-pass1
-          key: build-${{ matrix.arch }}-${{ github.event_name == 'schedule' && github.run_id || hashFiles('.version-pins', 'build.sh', '.github/workflows/build-toolchain.yml') }}
-          restore-keys: |
-            ${{ github.event_name != 'schedule' && format('build-{0}-', matrix.arch) || '' }}
+          pacman -Syu --needed --noconfirm base-devel git curl tar xz ncurses python rsync zstd cpio kmod bc wget gmp mpfr libmpc isl zlib gperf expat openssl mold cmake
 
       - name: Download & Extract Sources
         run: bash build.sh -a "${{ matrix.arch }}" download_resources
@@ -115,9 +72,6 @@ jobs:
         run: |
           echo "--- Stripping binaries ---"
           bash strip.sh "gcc-${{ matrix.arch }}/"
-
-      - name: Print ccache stats
-        run: ccache --show-stats
 
       - name: Package artifact
         id: package
