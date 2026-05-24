@@ -630,10 +630,7 @@ build_gcc_pass2() {
     # Verify profiles were generated
     profile_count=$(find "${PROFILE_DIR}" -name "*.gcda" 2>/dev/null | wc -l)
     if (( profile_count == 0 )) && ! $DRY_RUN; then
-      warn "No profile data found! Falling back to standard build."
-      touch "${WORK_DIR}/.stamp_gcc_pass2_fallback"
-      _build_gcc_pass2_fallback
-      return
+      die "No profile data found! PGO training failed."
     fi
     log "Collected ${profile_count} profile files"
   fi
@@ -670,28 +667,10 @@ build_gcc_pass2() {
   run_log "gcc-pgo-final-install" make install
 
   if ! $DRY_RUN; then
-    rm -f "${WORK_DIR}/.stamp_gcc_pass2_fallback"
     touch "${WORK_DIR}/.stamp_gcc_pass2"
   fi
   safe_cd "${WORK_DIR}"
   ok "Phase 3 complete: PGO-optimised compiler installed  [$(elapsed)]"
-}
-
-_build_gcc_pass2_fallback() {
-  header "STAGE 5: GCC PASS 2 (FALLBACK COMPILER)"
-  safe_cd "${WORK_DIR}"
-  mkdir -p build-gcc-pass2 && safe_cd build-gcc-pass2
-
-  _configure_gcc "gcc-src" "pass2" "${GCC_PASS2_FLAGS[@]}"
-
-  run_log "gcc-pass2-make" make all
-  run_log "gcc-pass2-install" make install
-
-  if ! $DRY_RUN; then
-    touch "${WORK_DIR}/.stamp_gcc_pass2"
-  fi
-  safe_cd "${WORK_DIR}"
-  ok "GCC Pass 2 done (standard fallback)  [$(elapsed)]"
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -748,7 +727,6 @@ print_summary() {
   local mold_hash_short; mold_hash_short=$(git -C mold-src rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
   local pgo_status="enabled"
-  [[ -f "${WORK_DIR}/.stamp_gcc_pass2_fallback" ]] && pgo_status="fallback (no profiles)"
 
   # Helper to truncate values for narrow box (max 34 chars)
   _fmt() {
