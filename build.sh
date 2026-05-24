@@ -118,7 +118,6 @@ TARGET_LDFLAGS="-Wl,-O1 -Wl,--as-needed -Wl,--sort-common -Wl,--enable-new-dtags
 # ─────────────────────────────────────────────────────────────────
 # ARGUMENT PARSING
 # ─────────────────────────────────────────────────────────────────
-ENABLE_PGO=true
 
 usage() {
   echo "Usage: $0 -a <arch> [-d] [stage...]"
@@ -220,7 +219,7 @@ _print_startup_info() {
   log "Prefix        : ${PREFIX}"
   log "Sysroot       : ${SYSROOT}"
   log "Parallel jobs : ${JOBS}"
-  log "PGO           : ${ENABLE_PGO}"
+  log "PGO           : enabled"
   echo
 }
 
@@ -632,7 +631,7 @@ build_gcc_pass2() {
     profile_count=$(find "${PROFILE_DIR}" -name "*.gcda" 2>/dev/null | wc -l)
     if (( profile_count == 0 )) && ! $DRY_RUN; then
       warn "No profile data found! Falling back to standard build."
-      ENABLE_PGO=false
+      touch "${WORK_DIR}/.stamp_gcc_pass2_fallback"
       _build_gcc_pass2_fallback
       return
     fi
@@ -671,6 +670,7 @@ build_gcc_pass2() {
   run_log "gcc-pgo-final-install" make install
 
   if ! $DRY_RUN; then
+    rm -f "${WORK_DIR}/.stamp_gcc_pass2_fallback"
     touch "${WORK_DIR}/.stamp_gcc_pass2"
   fi
   safe_cd "${WORK_DIR}"
@@ -747,8 +747,8 @@ print_summary() {
 
   local mold_hash_short; mold_hash_short=$(git -C mold-src rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
-  local pgo_status="disabled"
-  [[ "${ENABLE_PGO}" == "true" ]] && pgo_status="enabled"
+  local pgo_status="enabled"
+  [[ -f "${WORK_DIR}/.stamp_gcc_pass2_fallback" ]] && pgo_status="fallback (no profiles)"
 
   # Helper to truncate values for narrow box (max 34 chars)
   _fmt() {
