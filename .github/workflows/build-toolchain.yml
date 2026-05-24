@@ -47,9 +47,14 @@ jobs:
           path: pgo-profiles
           key: pgo-${{ matrix.arch }}-${{ github.event_name == 'schedule' && github.run_id || hashFiles('.version-pins') }}
 
+      - name: Configure Pacman parallel downloads
+        run: |
+          echo "--- Configuring Pacman parallel downloads ---"
+          sed -i 's/^#ParallelDownloads = 5/ParallelDownloads = 10/' /etc/pacman.conf
+
       - name: Install dependencies
         run: |
-          pacman -Syu --noconfirm base-devel git curl tar xz ncurses python rsync zstd cpio kmod bc wget gmp mpfr libmpc isl zlib gperf expat openssl mold ccache cmake
+          pacman -Syu --needed --noconfirm base-devel git curl tar xz ncurses python rsync zstd cpio kmod bc wget gmp mpfr libmpc isl zlib gperf expat openssl mold ccache cmake
 
       - name: Setup ccache
         uses: actions/cache@v4
@@ -124,7 +129,7 @@ jobs:
           ARTIFACT_NAME="toolchain-${{ matrix.arch }}-${DATE_STR}-gcc${GCC_HASH_SHORT}-binutils${BINUTILS_HASH_SHORT}"
           echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
           echo "tag_name=${DATE_STR}" >> "$GITHUB_OUTPUT"
-          tar --zstd -cf "${ARTIFACT_NAME}.tar.zst" -C "./" "gcc-${{ matrix.arch }}/"
+          tar -I "zstd -T0" -cf "${ARTIFACT_NAME}.tar.zst" -C "./" "gcc-${{ matrix.arch }}/"
           
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
