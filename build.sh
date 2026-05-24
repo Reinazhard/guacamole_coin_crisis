@@ -520,6 +520,10 @@ build_glibc() {
   safe_cd "${WORK_DIR}"
   mkdir -p build-glibc && safe_cd build-glibc
 
+  # glibc cannot be compiled with external _FORTIFY_SOURCE as it implements it
+  local glibc_cflags="${TARGET_CFLAGS//-Wp,-D_FORTIFY_SOURCE=3/}"
+  local glibc_cxxflags="${TARGET_CXXFLAGS//-Wp,-D_FORTIFY_SOURCE=3/}"
+
   run_log "glibc-configure" ../glibc-${GLIBC_VER}/configure \
       --host="${TARGET}" \
       --build="${BUILD_TRIPLE}" \
@@ -532,8 +536,8 @@ build_glibc() {
       --disable-selinux \
       CC="${TARGET}-gcc" \
       CXX="${TARGET}-g++" \
-      CFLAGS="${TARGET_CFLAGS}" \
-      CXXFLAGS="${TARGET_CXXFLAGS}"
+      CFLAGS="${glibc_cflags}" \
+      CXXFLAGS="${glibc_cxxflags}"
 
   # Install headers and minimal bootstrap stubs first.
   if ! $DRY_RUN; then
