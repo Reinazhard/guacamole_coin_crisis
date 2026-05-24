@@ -140,3 +140,11 @@ jobs:
           body_path: ${{ matrix.arch == 'arm64' && 'release_notes.txt' || '' }}
           append_body: ${{ matrix.arch != 'arm64' }}
           files: "*.tar.zst"
+
+      - name: Upload Build Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ matrix.arch }}
+          path: "build-*.log"
+          retention-days: 7
