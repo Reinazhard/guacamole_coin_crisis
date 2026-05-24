@@ -6,11 +6,6 @@ on:
   schedule:
     - cron: '0 0 1 * *' # Matches the schedule pipeline trigger
   workflow_dispatch:
-    inputs:
-      disable_pgo:
-        description: 'Disable PGO (faster build, slower compiler)'
-        type: boolean
-        default: false
 
 jobs:
   build-toolchain:
@@ -21,8 +16,6 @@ jobs:
     container:
       image: archlinux:base-devel
     timeout-minutes: 360 # 6 hours timeout
-    env:
-      DISABLE_PGO: ${{ github.event.inputs.disable_pgo || 'false' }}
     strategy:
       fail-fast: false
       matrix:
@@ -49,7 +42,6 @@ jobs:
           key: sources-${{ hashFiles('.version-pins') }}
 
       - name: Cache PGO profiles
-        if: env.DISABLE_PGO != 'true'
         uses: actions/cache@v4
         with:
           path: pgo-profiles
@@ -100,12 +92,7 @@ jobs:
         run: bash build.sh -a "${{ matrix.arch }}" build_glibc
 
       - name: Build Stage 5 (GCC Pass 2)
-        run: |
-          if [ "${{ env.DISABLE_PGO }}" = "true" ]; then
-            bash build.sh -a "${{ matrix.arch }}" -n build_gcc_pass2
-          else
-            bash build.sh -a "${{ matrix.arch }}" build_gcc_pass2
-          fi
+        run: bash build.sh -a "${{ matrix.arch }}" build_gcc_pass2
 
       - name: Build Stage 6 (Mold Linker)
         run: bash build.sh -a "${{ matrix.arch }}" install_mold

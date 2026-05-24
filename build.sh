@@ -121,18 +121,16 @@ TARGET_LDFLAGS="-Wl,-O1 -Wl,--as-needed -Wl,--sort-common -Wl,--enable-new-dtags
 ENABLE_PGO=true
 
 usage() {
-  echo "Usage: $0 -a <arch> [-n] [-d] [stage...]"
+  echo "Usage: $0 -a <arch> [-d] [stage...]"
   echo "  -a  Target architecture: arm64 | arm"
-  echo "  -n  Disable PGO (Profile-Guided Optimisation) — build without training"
   echo "  -d  Dry-run mode (print commands instead of executing them)"
   echo "  stage... Optional specific stages to run (e.g., build_binutils)"
   exit 1
 }
 
-while getopts "a:nd" flag; do
+while getopts "a:d" flag; do
   case "${flag}" in
     a) ARCH="${OPTARG}" ;;
-    n) ENABLE_PGO=false ;;
     d) DRY_RUN=true ;;
     *) usage ;;
   esac
@@ -576,11 +574,7 @@ GCC_PASS2_FLAGS=(
 build_gcc_pass2() {
   [[ -f "${WORK_DIR}/.stamp_gcc_pass2" ]] && { ok "GCC Pass 2 already built [cached]"; return 0; }
 
-  if $ENABLE_PGO; then
-    _build_gcc_pass2_pgo
-  else
-    _build_gcc_pass2_standard
-  fi
+  _build_gcc_pass2_pgo
 
   if ! $DRY_RUN; then
     touch "${WORK_DIR}/.stamp_gcc_pass2"
@@ -658,6 +652,7 @@ _build_gcc_pass2_pgo() {
     profile_count=$(find "${PROFILE_DIR}" -name "*.gcda" 2>/dev/null | wc -l)
     if (( profile_count == 0 )) && ! $DRY_RUN; then
       warn "No profile data found! Falling back to standard build."
+      ENABLE_PGO=false
       _build_gcc_pass2_standard
       return
     fi
