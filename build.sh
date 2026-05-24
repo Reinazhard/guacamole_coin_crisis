@@ -583,57 +583,48 @@ build_gcc_pass2() {
   local PROFILE_DIR="${WORK_DIR}/pgo-profiles"
   local profile_count=0
 
-  # Check for cached profiles
-  if [[ -d "${PROFILE_DIR}" ]]; then
-    profile_count=$(find "${PROFILE_DIR}" -name "*.gcda" 2>/dev/null | wc -l)
+  if ! $DRY_RUN; then
+    rm -rf "${PROFILE_DIR}"
+    mkdir -p "${PROFILE_DIR}"
   fi
 
-  if (( profile_count > 0 )); then
-    log "Found ${profile_count} cached PGO profiles — skipping training"
-    log "To retrain: rm -rf pgo-profiles/"
-  else
-    if ! $DRY_RUN; then
-      mkdir -p "${PROFILE_DIR}"
-    fi
+  # ── Phase 1: Build instrumented compiler ──────────────────────
+  log "Phase 1/3: Building instrumented compiler..."
+  safe_cd "${WORK_DIR}"
+  [[ -d build-gcc-pgo-instr ]] && rm -rf build-gcc-pgo-instr
+  mkdir -p build-gcc-pgo-instr && safe_cd build-gcc-pgo-instr
 
-    # ── Phase 1: Build instrumented compiler ──────────────────────
-    log "Phase 1/3: Building instrumented compiler..."
-    safe_cd "${WORK_DIR}"
-    [[ -d build-gcc-pgo-instr ]] && rm -rf build-gcc-pgo-instr
-    mkdir -p build-gcc-pgo-instr && safe_cd build-gcc-pgo-instr
+  _configure_gcc "gcc-src" "pass2-pgo-instr" "${GCC_PASS2_FLAGS[@]}" \
+      CFLAGS="${HOST_CFLAGS} -fprofile-generate=${PROFILE_DIR}" \
+      CXXFLAGS="${HOST_CXXFLAGS} -fprofile-generate=${PROFILE_DIR}" \
+      LDFLAGS="-static-libstdc++ -static-libgcc ${HOST_LDFLAGS} -fprofile-generate=${PROFILE_DIR}"
 
-    _configure_gcc "gcc-src" "pass2-pgo-instr" "${GCC_PASS2_FLAGS[@]}" \
-        CFLAGS="${HOST_CFLAGS} -fprofile-generate=${PROFILE_DIR}" \
-        CXXFLAGS="${HOST_CXXFLAGS} -fprofile-generate=${PROFILE_DIR}" \
-        LDFLAGS="-static-libstdc++ -static-libgcc ${HOST_LDFLAGS} -fprofile-generate=${PROFILE_DIR}"
+  run_log "gcc-pgo-instr-make" make all
+  run_log "gcc-pgo-instr-install" make install
 
-    run_log "gcc-pgo-instr-make" make all
-    run_log "gcc-pgo-instr-install" make install
+  ok "Phase 1 complete: instrumented compiler installed  [$(elapsed)]"
 
-    ok "Phase 1 complete: instrumented compiler installed  [$(elapsed)]"
+  # ── Phase 2: Training run — compile a kernel ──────────────────
+  log "Phase 2/3: Training on kernel compilation..."
+  safe_cd "${WORK_DIR}/linux-${LINUX_VER}"
 
-    # ── Phase 2: Training run — compile a kernel ──────────────────
-    log "Phase 2/3: Training on kernel compilation..."
-    safe_cd "${WORK_DIR}/linux-${LINUX_VER}"
+  run_log "pgo-kernel-mrproper" make ARCH="${KERNEL_ARCH}" mrproper
+  run_log "pgo-kernel-defconfig" make ARCH="${KERNEL_ARCH}" CROSS_COMPILE="${TARGET}-" defconfig
 
-    run_log "pgo-kernel-mrproper" make ARCH="${KERNEL_ARCH}" mrproper
-    run_log "pgo-kernel-defconfig" make ARCH="${KERNEL_ARCH}" CROSS_COMPILE="${TARGET}-" defconfig
+  log "Compiling kernel for PGO training (this takes a while)..."
+  # Allow failure during training as partial profiles are still useful
+  run_log "pgo-kernel-make" make ARCH="${KERNEL_ARCH}" CROSS_COMPILE="${TARGET}-" -j${JOBS} all || true
 
-    log "Compiling kernel for PGO training (this takes a while)..."
-    # Allow failure during training as partial profiles are still useful
-    run_log "pgo-kernel-make" make ARCH="${KERNEL_ARCH}" CROSS_COMPILE="${TARGET}-" -j${JOBS} all || true
+  run_log "pgo-kernel-clean" make ARCH="${KERNEL_ARCH}" mrproper
 
-    run_log "pgo-kernel-clean" make ARCH="${KERNEL_ARCH}" mrproper
+  ok "Phase 2 complete: profile data collected  [$(elapsed)]"
 
-    ok "Phase 2 complete: profile data collected  [$(elapsed)]"
-
-    # Verify profiles were generated
-    profile_count=$(find "${PROFILE_DIR}" -name "*.gcda" 2>/dev/null | wc -l)
-    if (( profile_count == 0 )) && ! $DRY_RUN; then
-      die "No profile data found! PGO training failed."
-    fi
-    log "Collected ${profile_count} profile files"
+  # Verify profiles were generated
+  profile_count=$(find "${PROFILE_DIR}" -name "*.gcda" 2>/dev/null | wc -l)
+  if (( profile_count == 0 )) && ! $DRY_RUN; then
+    die "No profile data found! PGO training failed."
   fi
+  log "Collected ${profile_count} profile files"
 
   # ── Phase 3: Rebuild with collected profiles ──────────────────
   log "Phase 3/3: Rebuilding compiler with profile data..."
