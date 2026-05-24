@@ -393,6 +393,7 @@ build_binutils() {
       --disable-nls \
       --disable-werror \
       --disable-gprofng \
+      --disable-source-highlight \
       --disable-docs \
       CFLAGS="${HOST_CFLAGS}" \
       CXXFLAGS="${HOST_CXXFLAGS}" \
