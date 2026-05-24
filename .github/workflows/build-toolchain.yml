@@ -15,7 +15,7 @@ jobs:
       contents: write
     container:
       image: archlinux:base-devel
-    timeout-minutes: 360 # 6 hours timeout
+    timeout-minutes: 600 # 10 hours timeout
     strategy:
       fail-fast: false
       matrix:
@@ -61,17 +61,18 @@ jobs:
       - name: Build Stage 6 (Mold Linker)
         run: bash build.sh -a "${{ matrix.arch }}" install_mold
 
+      - name: Build Stage 7 (Strip Binaries)
+        run: bash build.sh -a "${{ matrix.arch }}" strip_binaries
+
+      - name: Build Stage 8 (ELF Validation)
+        run: bash build.sh -a "${{ matrix.arch }}" validate_elf
+
       - name: Print Summary
         run: |
           bash build.sh -a "${{ matrix.arch }}" print_summary | tee summary_raw.txt
           echo '```text' > release_notes.txt
           sed 's/\x1b\[[0-9;]*m//g' summary_raw.txt >> release_notes.txt
           echo '```' >> release_notes.txt
-
-      - name: Strip binaries
-        run: |
-          echo "--- Stripping binaries ---"
-          bash strip.sh "gcc-${{ matrix.arch }}/"
 
       - name: Package artifact
         id: package

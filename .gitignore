@@ -1,0 +1,32 @@
+# Source code build directories
+binutils-*/
+build-binutils/
+build-gcc*/
+gcc-*/
+gcc-*/
+glibc-*/
+gmp-*/
+isl-*/
+linux-*/
+mpc-*/
+mpfr-*/
+
+# Profiles for PGO
+pgo-profiles/
+
+# Toolchain installations
+gcc-arm/
+gcc-arm64/
+gcc-x86/
+gcc-pgo-stage1/
+
+# Log files
+*.log
+
+# Artifacts
+*.tar.*
+*.zip
+.*
+
+# Rule files
+GEMINI.md

@@ -289,8 +289,6 @@ fetch() {
 # DOWNLOAD & EXTRACT
 # ─────────────────────────────────────────────────────────────────
 download_resources() {
-  [[ -f "${WORK_DIR}/.stamp_downloaded" ]] && return 0
-
   header "DOWNLOADING & CLONING SOURCES"
   mkdir -p sources
 
@@ -359,7 +357,6 @@ download_resources() {
       ln -sfn "../${dep_dir}" "gcc-src/${dep_name}"
       ln -sfn "../${dep_dir}" "binutils-src/${dep_name}"
     done
-    touch "${WORK_DIR}/.stamp_downloaded"
   fi
   ok "All sources ready  [$(elapsed)]"
 }
@@ -368,8 +365,6 @@ download_resources() {
 # STAGE 1: BINUTILS
 # ─────────────────────────────────────────────────────────────────
 build_binutils() {
-  [[ -f "${WORK_DIR}/.stamp_binutils" ]] && { ok "Binutils already built [cached]"; return 0; }
-
   header "STAGE 1: BINUTILS"
   safe_cd "${WORK_DIR}"
   mkdir -p build-binutils && safe_cd build-binutils
@@ -401,9 +396,7 @@ build_binutils() {
   run_log "binutils-make" make
   run_log "binutils-install" make install
 
-  if ! $DRY_RUN; then
-    touch "${WORK_DIR}/.stamp_binutils"
-  fi
+  # No stamp file needed
   safe_cd "${WORK_DIR}"
   ok "Binutils done  [$(elapsed)]"
 }
@@ -412,8 +405,6 @@ build_binutils() {
 # STAGE 2: LINUX KERNEL HEADERS
 # ─────────────────────────────────────────────────────────────────
 build_linux_headers() {
-  [[ -f "${WORK_DIR}/.stamp_linux_headers" ]] && { ok "Linux headers already installed [cached]"; return 0; }
-
   header "STAGE 2: LINUX KERNEL HEADERS"
   safe_cd "${WORK_DIR}/linux-${LINUX_VER}"
 
@@ -421,9 +412,7 @@ build_linux_headers() {
        INSTALL_HDR_PATH="${SYSROOT}/usr" \
        headers_install
 
-  if ! $DRY_RUN; then
-    touch "${WORK_DIR}/.stamp_linux_headers"
-  fi
+  # No stamp file needed
   safe_cd "${WORK_DIR}"
   ok "Linux headers done  [$(elapsed)]"
 }
@@ -480,8 +469,6 @@ _configure_gcc() {
 }
 
 build_gcc_pass1() {
-  [[ -f "${WORK_DIR}/.stamp_gcc_pass1" ]] && { ok "GCC Pass 1 already built [cached]"; return 0; }
-
   header "STAGE 3: GCC PASS 1 (BOOTSTRAP C COMPILER)"
   safe_cd "${WORK_DIR}"
   mkdir -p build-gcc-pass1 && safe_cd build-gcc-pass1
@@ -502,9 +489,7 @@ build_gcc_pass1() {
   run_log "gcc-pass1-make-libgcc" make all-target-libgcc
   run_log "gcc-pass1-install-libgcc" make install-target-libgcc
 
-  if ! $DRY_RUN; then
-    touch "${WORK_DIR}/.stamp_gcc_pass1"
-  fi
+  # No stamp file needed
   safe_cd "${WORK_DIR}"
   ok "GCC Pass 1 done  [$(elapsed)]"
 }
@@ -513,8 +498,6 @@ build_gcc_pass1() {
 # STAGE 4: GLIBC
 # ─────────────────────────────────────────────────────────────────
 build_glibc() {
-  [[ -f "${WORK_DIR}/.stamp_glibc" ]] && { ok "Glibc already built [cached]"; return 0; }
-
   header "STAGE 4: GLIBC"
   safe_cd "${WORK_DIR}"
   mkdir -p build-glibc && safe_cd build-glibc
@@ -554,9 +537,7 @@ build_glibc() {
   run_log "glibc-make" make
   run_log "glibc-install" make install_root="${SYSROOT}" install
 
-  if ! $DRY_RUN; then
-    touch "${WORK_DIR}/.stamp_glibc"
-  fi
+  # No stamp file needed
   safe_cd "${WORK_DIR}"
   ok "Glibc done  [$(elapsed)]"
 }
@@ -576,8 +557,6 @@ GCC_PASS2_FLAGS=(
 )
 
 build_gcc_pass2() {
-  [[ -f "${WORK_DIR}/.stamp_gcc_pass2" ]] && { ok "GCC Pass 2 already built [cached]"; return 0; }
-
   header "STAGE 5: GCC PASS 2 (PGO COMPILER)"
 
   local PROFILE_DIR="${WORK_DIR}/pgo-profiles"
@@ -657,9 +636,7 @@ build_gcc_pass2() {
   run_log "gcc-pgo-final-make" make all
   run_log "gcc-pgo-final-install" make install
 
-  if ! $DRY_RUN; then
-    touch "${WORK_DIR}/.stamp_gcc_pass2"
-  fi
+  # No stamp file needed
   safe_cd "${WORK_DIR}"
   ok "Phase 3 complete: PGO-optimised compiler installed  [$(elapsed)]"
 }
@@ -668,8 +645,6 @@ build_gcc_pass2() {
 # STAGE 6: MOLD LINKER
 # ─────────────────────────────────────────────────────────────────
 install_mold() {
-  [[ -f "${WORK_DIR}/.stamp_mold" ]] && { ok "Mold already installed [cached]"; return 0; }
-
   header "STAGE 6: MOLD LINKER"
 
   # Clone or update mold source
@@ -698,11 +673,174 @@ install_mold() {
   if ! $DRY_RUN; then
     ln -sfn mold "${PREFIX}/bin/ld.mold"
     ln -sfn ld.mold "${PREFIX}/bin/${TARGET}-ld.mold"
-    touch "${WORK_DIR}/.stamp_mold"
   fi
 
   safe_cd "${WORK_DIR}"
   ok "Mold linker installed  [$(elapsed)]"
+}
+
+# ─────────────────────────────────────────────────────────────────
+# STAGE 7: STRIP BINARIES (Merged from strip.sh)
+# ─────────────────────────────────────────────────────────────────
+strip_binaries() {
+  header "STAGE 7: STRIPPING BINARIES"
+
+  local CUR_DIR="${PREFIX}"
+  log "Target directory for stripping: ${CUR_DIR}"
+
+  # Target specific debug sections to remove, but explicitly spare .debug_frame
+  # to ensure basic stack unwinding remains functional.
+  local SECTION_FLAGS=(
+      --remove-section=.comment
+      --remove-section=.note
+      --remove-section=.debug_info
+      --remove-section=.debug_aranges
+      --remove-section=.debug_pubnames
+      --remove-section=.debug_pubtypes
+      --remove-section=.debug_abbrev
+      --remove-section=.debug_line
+      --remove-section=.debug_str
+      --remove-section=.debug_ranges
+      --remove-section=.debug_loc
+      --remove-section=.debug_rnglists
+      --remove-section=.debug_loclists
+  )
+
+  local STRIP_FLAGS=(
+      --strip-unneeded
+      "${SECTION_FLAGS[@]}"
+  )
+
+  # Strip host tools and shared objects by ELF machine.
+  strip_elf_files() {
+      local tool="$1"
+      local machine_pattern="$2"
+
+      log "Stripping ELF binaries (Machine: ${machine_pattern}) with ${tool}..."
+
+      find "${CUR_DIR}" -type f \( -executable -o -name "*.so" -o -name "*.so.*" \) \
+          -print0 | xargs -0 -P "${JOBS}" -n1 bash -c '
+          file="$1"; tool="$2"; pattern="$3"; shift 3; flags=("$@")
+          if readelf -h "$file" 2>/dev/null | grep -iq "Machine:.*$pattern"; then
+              "$tool" "${flags[@]}" "$file" 2>/dev/null || true
+          fi
+      ' _ {} "${tool}" "${machine_pattern}" "${STRIP_FLAGS[@]}" || true
+  }
+
+  # Strip target static libraries and object files in sysroot.
+  strip_target_runtime_artifacts() {
+      local objcopy_tool="$1"
+      local target_triple="$2"
+      local sysroot_dir="${CUR_DIR}/${target_triple}/sysroot"
+
+      if [[ ! -d "${sysroot_dir}" ]]; then
+          warn "Sysroot not found for ${target_triple}. Skipping runtime library stripping."
+          return 0
+      fi
+
+      log "Stripping target runtime artifacts in ${sysroot_dir} with ${objcopy_tool}..."
+      find "${sysroot_dir}" -type f \( -name "*.a" -o -name "*.o" \) -print0 | \
+          xargs -0 -P "${JOBS}" -n1 bash -c '
+              file="$1"; objcopy="$2"; shift 2; flags=("$@")
+              "$objcopy" "${flags[@]}" "$file" 2>/dev/null || true
+          ' _ {} "${objcopy_tool}" "${SECTION_FLAGS[@]}" || true
+  }
+
+  # Strip an architecture target toolchain and sysroot.
+  strip_arch_target() {
+      local arch_name="$1"      # e.g., "aarch64" or "arm32"
+      local machine_pat="$2"    # e.g., "AArch64" or "ARM"
+      local target_triple="$3"  # e.g., "aarch64-linux-gnu" or "arm-linux-gnueabihf"
+      local strip_bin="${CUR_DIR}/bin/${target_triple}-strip"
+      local objcopy_bin="${CUR_DIR}/bin/${target_triple}-objcopy"
+
+      if [[ -x "${strip_bin}" ]]; then
+          strip_elf_files "${strip_bin}" "${machine_pat}"
+          if [[ -x "${objcopy_bin}" ]]; then
+              strip_target_runtime_artifacts "${objcopy_bin}" "${target_triple}"
+          else
+              warn "Objcopy for ${arch_name} not found. Skipping target archive/object stripping."
+          fi
+      else
+          warn "Stripper for ${arch_name} not found. Skipping."
+      fi
+  }
+
+  local X86S
+  X86S=$(command -v strip || true)
+  if [[ -n "${X86S}" && -x "${X86S}" ]]; then
+      strip_elf_files "${X86S}" "X86-64"
+  else
+      warn "Stripper for x86 not found. Skipping."
+  fi
+
+  if [[ "${ARCH}" == "arm64" ]]; then
+      strip_arch_target "aarch64" "AArch64" "aarch64-linux-gnu"
+  elif [[ "${ARCH}" == "arm" ]]; then
+      strip_arch_target "arm32" "ARM" "arm-linux-gnueabihf"
+  fi
+
+  ok "Stripping process completed."
+}
+
+# ─────────────────────────────────────────────────────────────────
+# STAGE 8: ELF VALIDATION
+# ─────────────────────────────────────────────────────────────────
+validate_elf() {
+  header "STAGE 8: ELF VALIDATION"
+
+  log "Validating host compiler binaries (should be X86-64)..."
+  local host_bins=("gcc" "ld" "as" "mold")
+  for tool in "${host_bins[@]}"; do
+    local bin_path
+    if [[ "${tool}" == "mold" ]]; then
+      bin_path="${PREFIX}/bin/mold"
+    else
+      bin_path="${PREFIX}/bin/${TARGET}-${tool}"
+    fi
+
+    if [[ -f "${bin_path}" ]]; then
+      log "Checking ${bin_path}..."
+      local info
+      info=$(readelf -h "${bin_path}" 2>/dev/null | grep -i "Machine:") || true
+      if [[ "${info}" =~ "X86-64" ]]; then
+        ok "  ${tool} is valid X86-64 ELF"
+      else
+        die "  ${tool} is NOT valid X86-64: ${info}"
+      fi
+    else
+      warn "  ${tool} not found at ${bin_path}"
+    fi
+  done
+
+  log "Validating target libraries (should be correct target arch)..."
+  local expected_pattern=""
+  if [[ "${ARCH}" == "arm64" ]]; then
+    expected_pattern="AArch64"
+  elif [[ "${ARCH}" == "arm" ]]; then
+    expected_pattern="ARM"
+  fi
+
+  local actual_lib
+  actual_lib=$(find "${SYSROOT}/usr/lib" -name "libc.so.*" -o -name "libc-*.so" | head -n1)
+  if [[ -z "${actual_lib}" ]]; then
+    actual_lib=$(find "${SYSROOT}/usr/lib" -name "crt1.o" | head -n1)
+  fi
+
+  if [[ -n "${actual_lib}" && -f "${actual_lib}" ]]; then
+    log "Checking target library ${actual_lib}..."
+    local info
+    info=$(readelf -h "${actual_lib}" 2>/dev/null | grep -i "Machine:") || true
+    if [[ "${info}" =~ "${expected_pattern}" ]]; then
+      ok "  ${actual_lib} is valid ${expected_pattern} ELF"
+    else
+      die "  ${actual_lib} is NOT valid ${expected_pattern}: ${info}"
+    fi
+  else
+    die "Target runtime libraries not found in sysroot"
+  fi
+
+  ok "ELF validation successful."
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -777,6 +915,8 @@ if [[ "${STAGES[0]}" == "all" ]]; then
   build_glibc
   build_gcc_pass2
   install_mold
+  strip_binaries
+  validate_elf
   print_summary
 else
   for stage in "${STAGES[@]}"; do
