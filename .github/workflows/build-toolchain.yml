@@ -11,8 +11,6 @@ jobs:
   build-toolchain:
     name: Build ${{ matrix.arch }} (${{ matrix.target_triple }})
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     container:
       image: archlinux:base-devel
     timeout-minutes: 600 # 10 hours timeout
@@ -24,6 +22,8 @@ jobs:
             target_triple: "aarch64-linux-gnu"
           - arch: "arm"
             target_triple: "arm-linux-gnueabihf"
+    outputs:
+      tag_name: ${{ steps.package.outputs.tag_name }}
 
     steps:
       - name: Checkout repository
@@ -85,28 +85,52 @@ jobs:
           echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
           echo "tag_name=${DATE_STR}" >> "$GITHUB_OUTPUT"
           tar -I "zstd -T0" -cf "${ARTIFACT_NAME}.tar.zst" -C "./" "gcc-${{ matrix.arch }}/"
-          
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.package.outputs.artifact_name }}
-          path: "*.tar.zst"
+          path: |
+            *.tar.zst
+            release_notes.txt
           retention-days: 30
-
-      - name: Publish to GitHub Release
-        uses: softprops/action-gh-release@v2
-        if: github.event_name != 'pull_request'
-        with:
-          tag_name: ${{ steps.package.outputs.tag_name }}
-          name: Toolchain Release ${{ steps.package.outputs.tag_name }}
-          body_path: ${{ matrix.arch == 'arm64' && 'release_notes.txt' || '' }}
-          append_body: ${{ matrix.arch != 'arm64' }}
-          files: "*.tar.zst"
 
       - name: Upload Build Logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-logs-${{ matrix.arch }}
+          # Note: All stages and commands run via run_log() produce log files
+          # matching ${WORK_DIR}/build-${stage_name}.log. Thus, the "build-*.log"
+          # glob perfectly covers all of them (including binutils, pass1, glibc,
+          # pass2, mold, and PGO training logs).
           path: "build-*.log"
           retention-days: 7
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: build-toolchain
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Prepare release notes and assets
+        run: |
+          cp artifacts/toolchain-arm64-*/release_notes.txt ./release_notes.txt
+          mkdir assets
+          cp artifacts/toolchain-arm64-*/*.tar.zst assets/
+          cp artifacts/toolchain-arm-*/*.tar.zst assets/
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build-toolchain.outputs.tag_name }}
+          name: Toolchain Release ${{ needs.build-toolchain.outputs.tag_name }}
+          body_path: ./release_notes.txt
+          files: assets/*.tar.zst
