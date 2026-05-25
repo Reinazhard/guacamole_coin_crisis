@@ -4,6 +4,29 @@
 
 Personal build scripts for producing redistributable GNU cross-toolchains for ARM Linux targets, primarily used for cross-compiling Linux kernels from an `x86-64-v3` host. Builds a complete, self-contained sysroot-based toolchain from source across five stages (Binutils → Linux headers → GCC bootstrap → glibc → GCC final), pinned to specific upstream commits for reproducibility. Pre-built tarballs are published automatically to GitHub Releases on every push via CI.
 
+## Usage
+
+### Build all stages (both targets run via CI)
+
+    bash build.sh -a arm64
+    bash build.sh -a arm
+
+### Run a specific stage
+
+    bash build.sh -a arm64 build_gcc_pass2
+
+### Clean build directories
+
+    bash build.sh -a arm64 clean
+
+### Clean including sources
+
+    CLEAN_SOURCES=true bash build.sh -a arm64 clean
+
+### Per-target flag overrides
+
+Edit `targets/<triple>.conf`. Variables sourced after the main target resolution block; any variable from `lib/flags.sh` or `lib/targets.sh` may be overridden.
+
 ## Prebuilt Binaries
 
 Pre-built toolchain tarballs are available on the [Releases page](https://github.com/Reinazhard/guacamole_coin_crisis/releases).

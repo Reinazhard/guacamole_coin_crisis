@@ -10,6 +10,8 @@ isl-*/
 linux-*/
 mpc-*/
 mpfr-*/
+mold-src/
+build-mold/
 
 # Profiles for PGO
 pgo-profiles/
