@@ -63,6 +63,16 @@ done
 # 8. Parse remaining positional args as STAGES
 STAGES=("${@:-all}")
 
+# Elapsed-time tracking persistence across separate stage invocations
+if [[ "${STAGES[0]}" == "all" ]] || [[ " ${STAGES[*]} " == *" download_resources "* ]]; then
+  START_TIME=$(date +%s)
+  echo "${START_TIME}" > "${WORK_DIR}/.build_start_time_${ARCH}"
+elif [[ -f "${WORK_DIR}/.build_start_time_${ARCH}" ]]; then
+  START_TIME=$(cat "${WORK_DIR}/.build_start_time_${ARCH}")
+else
+  echo "${START_TIME}" > "${WORK_DIR}/.build_start_time_${ARCH}"
+fi
+
 # Helper to check if we should print startup info
 _should_print_startup_info() {
   [[ "${STAGES[*]}" != "print_summary" ]]
