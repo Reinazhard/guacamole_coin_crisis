@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1 # Shallow clone
 
@@ -87,7 +87,7 @@ jobs:
           tar -I "zstd -T0" -cf "${ARTIFACT_NAME}.tar.zst" -C "./" "gcc-${{ matrix.arch }}/"
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.package.outputs.artifact_name }}
           path: |
@@ -97,7 +97,7 @@ jobs:
 
       - name: Upload Build Logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-logs-${{ matrix.arch }}
           # Note: All stages and commands run via run_log() produce log files
@@ -116,7 +116,7 @@ jobs:
       contents: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: ./artifacts
 
@@ -128,7 +128,7 @@ jobs:
           cp artifacts/toolchain-arm-*/*.tar.zst assets/
 
       - name: Publish to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.build-toolchain.outputs.tag_name }}
           name: Toolchain Release ${{ needs.build-toolchain.outputs.tag_name }}
