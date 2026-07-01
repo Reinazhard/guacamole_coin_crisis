@@ -40,8 +40,17 @@ jobs:
         run: |
           pacman -Syu --needed --noconfirm base-devel git curl tar xz ncurses python rsync zstd cpio kmod bc wget gmp mpfr libmpc isl zlib gperf expat openssl mold cmake
 
+      - name: Install llvm-bolt-bin from AUR
+        run: |
+          useradd -m builduser
+          echo "builduser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          sudo -u builduser bash -c "cd ~ && git clone https://aur.archlinux.org/llvm-bolt-bin.git && cd llvm-bolt-bin && makepkg -si --noconfirm"
+
       - name: Download & Extract Sources
         run: bash build.sh -a "${{ matrix.arch }}" download_resources
+
+      - name: Build Stage 1.5 (Mold Linker)
+        run: bash build.sh -a "${{ matrix.arch }}" install_mold
 
       - name: Build Stage 1 (Binutils)
         run: bash build.sh -a "${{ matrix.arch }}" build_binutils
@@ -57,9 +66,6 @@ jobs:
 
       - name: Build Stage 5 (GCC Pass 2)
         run: bash build.sh -a "${{ matrix.arch }}" build_gcc_pass2
-
-      - name: Build Stage 6 (Mold Linker)
-        run: bash build.sh -a "${{ matrix.arch }}" install_mold
 
       - name: Build Stage 7 (Strip Binaries)
         run: bash build.sh -a "${{ matrix.arch }}" strip_binaries

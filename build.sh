@@ -114,12 +114,12 @@ _should_print_startup_info && _print_startup_info
 if [[ "${STAGES[0]}" == "all" ]]; then
   check_deps
   download_resources
+  install_mold
   build_binutils
   build_linux_headers
   build_gcc_pass1
   build_glibc
   build_gcc_pass2
-  install_mold
   strip_binaries
   validate_elf
   print_summary
