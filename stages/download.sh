@@ -80,7 +80,7 @@ download_resources() {
 
   local fetch_pids=()
   fetch "https://ftp.gnu.org/gnu/glibc/glibc-${GLIBC_VER}.tar.xz" "${GLIBC_SHA256:-}" & fetch_pids+=($!)
-  fetch "https://mirrors.kernel.org/pub/linux/kernel/v${LINUX_VER%%.*}.x/linux-${LINUX_VER}.tar.xz" "${LINUX_SHA256:-}" & fetch_pids+=($!)
+  fetch "https://mirrors.tuna.tsinghua.edu.cn/kernel/v${LINUX_VER%%.*}.x/linux-${LINUX_VER}.tar.xz" "${LINUX_SHA256:-}" & fetch_pids+=($!)
   fetch "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VER}.tar.xz" "${GMP_SHA256:-}" & fetch_pids+=($!)
   fetch "https://ftp.gnu.org/gnu/mpfr/mpfr-${MPFR_VER}.tar.xz" "${MPFR_SHA256:-}" & fetch_pids+=($!)
   fetch "https://ftp.gnu.org/gnu/mpc/mpc-${MPC_VER}.tar.xz" "${MPC_SHA256:-}" & fetch_pids+=($!)
