@@ -89,7 +89,7 @@ build_gcc_pass2() {
   _configure_gcc "gcc-src" "pass2-pgo-final" "${GCC_PASS2_FLAGS[@]}" \
       CFLAGS="${HOST_CFLAGS} -fprofile-use=${PROFILE_DIR} -fprofile-correction -Wno-missing-profile" \
       CXXFLAGS="${HOST_CXXFLAGS} -fprofile-use=${PROFILE_DIR} -fprofile-correction -Wno-missing-profile" \
-      LDFLAGS="-static-libstdc++ -static-libgcc ${HOST_LDFLAGS} -fprofile-use=${PROFILE_DIR} -Wl,--emit-relocs"
+      LDFLAGS="-static-libstdc++ -static-libgcc ${HOST_LDFLAGS} -fuse-ld=bfd -fprofile-use=${PROFILE_DIR} -Wl,--emit-relocs"
 
   run_log "gcc-pgo-final-make" make all
   run_log "gcc-pgo-final-install" make install
