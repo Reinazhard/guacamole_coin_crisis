@@ -20,7 +20,7 @@ build-toolchain:
     - sed -i 's/^#ParallelDownloads = 5/ParallelDownloads = 10/' /etc/pacman.conf
     - pacman -Syu --needed --noconfirm base-devel git curl tar xz ncurses python rsync zstd cpio kmod bc wget gmp mpfr libmpc isl zlib gperf expat openssl mold cmake
     - useradd -m builduser
-    - echo "builduser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+    - 'echo "builduser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers'
     - sudo -u builduser bash -c "cd ~ && git clone https://aur.archlinux.org/llvm-bolt-bin.git && cd llvm-bolt-bin && makepkg -si --noconfirm"
     - bash build.sh -a "${ARCH}" download_resources
     - bash build.sh -a "${ARCH}" install_mold
