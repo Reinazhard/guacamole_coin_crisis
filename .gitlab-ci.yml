@@ -1,0 +1,68 @@
+stages:
+  - build
+  - release
+
+variables:
+  GIT_DEPTH: 1
+
+build-toolchain:
+  stage: build
+  image: archlinux:base-devel
+  timeout: 10h
+  parallel:
+    matrix:
+      - ARCH: "arm64"
+        TARGET_TRIPLE: "aarch64-linux-gnu"
+      - ARCH: "arm"
+        TARGET_TRIPLE: "arm-linux-gnueabihf"
+  script:
+    - echo "--- Configuring Pacman parallel downloads ---"
+    - sed -i 's/^#ParallelDownloads = 5/ParallelDownloads = 10/' /etc/pacman.conf
+    - pacman -Syu --needed --noconfirm base-devel git curl tar xz ncurses python rsync zstd cpio kmod bc wget gmp mpfr libmpc isl zlib gperf expat openssl mold cmake
+    - useradd -m builduser
+    - echo "builduser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+    - sudo -u builduser bash -c "cd ~ && git clone https://aur.archlinux.org/llvm-bolt-bin.git && cd llvm-bolt-bin && makepkg -si --noconfirm"
+    - bash build.sh -a "${ARCH}" download_resources
+    - bash build.sh -a "${ARCH}" install_mold
+    - bash build.sh -a "${ARCH}" build_binutils
+    - bash build.sh -a "${ARCH}" build_linux_headers
+    - bash build.sh -a "${ARCH}" build_gcc_pass1
+    - bash build.sh -a "${ARCH}" build_glibc
+    - bash build.sh -a "${ARCH}" build_gcc_pass2
+    - bash build.sh -a "${ARCH}" strip_binaries
+    - bash build.sh -a "${ARCH}" validate_elf
+    - bash build.sh -a "${ARCH}" print_summary | tee summary_raw.txt
+    - echo '```text' > release_notes.txt
+    - sed 's/\x1b\[[0-9;]*m//g' summary_raw.txt >> release_notes.txt
+    - echo '```' >> release_notes.txt
+    - echo "--- Packaging artifact ---"
+    - GCC_HASH_SHORT=$(git -C gcc-src rev-parse --short HEAD || echo "unknown")
+    - BINUTILS_HASH_SHORT=$(git -C binutils-src rev-parse --short HEAD || echo "unknown")
+    - DATE_STR=$(date +%Y.%m.%d)-${CI_PIPELINE_IID}
+    - ARTIFACT_NAME="toolchain-${ARCH}-${DATE_STR}-gcc${GCC_HASH_SHORT}-binutils${BINUTILS_HASH_SHORT}"
+    - tar -I "zstd -T0" -cf "${ARTIFACT_NAME}.tar.zst" -C "./" "gcc-${ARCH}/"
+    - echo "TAG_NAME=${DATE_STR}" > build.env
+  artifacts:
+    paths:
+      - "*.tar.zst"
+      - release_notes.txt
+      - "build-*.log"
+    reports:
+      dotenv: build.env
+    expire_in: 30 days
+    when: always
+
+publish-release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs:
+    - job: build-toolchain
+      artifacts: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "merge_request_event"
+  script:
+    - echo "Creating release for tag ${TAG_NAME}"
+  release:
+    name: 'Toolchain Release ${TAG_NAME}'
+    description: './release_notes.txt'
+    tag_name: '${TAG_NAME}'
