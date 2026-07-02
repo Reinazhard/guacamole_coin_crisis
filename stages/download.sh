@@ -78,17 +78,21 @@ download_resources() {
     fi
   fi
 
-  # Tarball sources
-  fetch "https://ftp.gnu.org/gnu/glibc/glibc-${GLIBC_VER}.tar.xz" "${GLIBC_SHA256:-}" &
-  fetch "https://cdn.kernel.org/pub/linux/kernel/v${LINUX_VER%%.*}.x/linux-${LINUX_VER}.tar.xz" "${LINUX_SHA256:-}" &
-  fetch "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VER}.tar.xz" "${GMP_SHA256:-}" &
-  fetch "https://ftp.gnu.org/gnu/mpfr/mpfr-${MPFR_VER}.tar.xz" "${MPFR_SHA256:-}" &
-  fetch "https://ftp.gnu.org/gnu/mpc/mpc-${MPC_VER}.tar.xz" "${MPC_SHA256:-}" &
-  fetch "https://libisl.sourceforge.io/isl-${ISL_VER}.tar.xz" "${ISL_SHA256:-}" &
-  wait
+  local fetch_pids=()
+  fetch "https://ftp.gnu.org/gnu/glibc/glibc-${GLIBC_VER}.tar.xz" "${GLIBC_SHA256:-}" & fetch_pids+=($!)
+  fetch "https://mirrors.kernel.org/pub/linux/kernel/v${LINUX_VER%%.*}.x/linux-${LINUX_VER}.tar.xz" "${LINUX_SHA256:-}" & fetch_pids+=($!)
+  fetch "https://ftp.gnu.org/gnu/gmp/gmp-${GMP_VER}.tar.xz" "${GMP_SHA256:-}" & fetch_pids+=($!)
+  fetch "https://ftp.gnu.org/gnu/mpfr/mpfr-${MPFR_VER}.tar.xz" "${MPFR_SHA256:-}" & fetch_pids+=($!)
+  fetch "https://ftp.gnu.org/gnu/mpc/mpc-${MPC_VER}.tar.xz" "${MPC_SHA256:-}" & fetch_pids+=($!)
+  fetch "https://libisl.sourceforge.io/isl-${ISL_VER}.tar.xz" "${ISL_SHA256:-}" & fetch_pids+=($!)
+  
+  for pid in "${fetch_pids[@]}"; do
+    wait "$pid" || die "A background download failed!"
+  done
 
   header "EXTRACTING SOURCES"
 
+  local extract_pids=()
   for pkg in \
     "glibc-${GLIBC_VER}" \
     "linux-${LINUX_VER}" \
@@ -102,11 +106,14 @@ download_resources() {
       if $DRY_RUN; then
         log "[DRY-RUN] tar xf sources/${pkg}.tar.*"
       else
-        tar xf "sources/${pkg}.tar."* &
+        tar xf "sources/${pkg}.tar."* & extract_pids+=($!)
       fi
     fi
   done
-  wait
+  
+  for pid in "${extract_pids[@]}"; do
+    wait "$pid" || die "A background extraction failed!"
+  done
 
   # Integrate prerequisites as in-tree symlinks for both GCC and Binutils.
   if ! $DRY_RUN; then
