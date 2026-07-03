@@ -7,6 +7,8 @@ variables:
 
 build-toolchain:
   stage: build
+  tags:
+    - self-host
   image: archlinux:base-devel
   timeout: 10h
   parallel:
@@ -54,6 +56,8 @@ build-toolchain:
 
 publish-release:
   stage: release
+  tags:
+    - self-host
   image: registry.gitlab.com/gitlab-org/release-cli:latest
   needs:
     - job: build-toolchain
