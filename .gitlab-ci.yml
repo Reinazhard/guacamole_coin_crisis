@@ -11,6 +11,12 @@ build-toolchain:
     - self-host
   image: archlinux:base-devel
   timeout: 10h
+  cache:
+    key:
+      files:
+        - .version-pins
+    paths:
+      - sources/
   parallel:
     matrix:
       - ARCH: "arm64"
