@@ -18,10 +18,10 @@ install_mold() {
     fi
   fi
 
-  safe_cd "${WORK_DIR}"
+  safe_cd "${BUILD_DIR}"
   [[ -d build-mold ]] && rm -rf build-mold
 
-  run_log "mold-cmake" cmake -B build-mold -S mold-src \
+  run_log "mold-cmake" cmake -B build-mold -S "${WORK_DIR}/mold-src" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
     -DMOLD_MOSTLY_STATIC=ON
