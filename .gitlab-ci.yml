@@ -47,6 +47,7 @@ build-toolchain:
     - ARTIFACT_NAME="toolchain-${ARCH}-${DATE_STR}-gcc${GCC_HASH_SHORT}-binutils${BINUTILS_HASH_SHORT}"
     - tar -I "zstd -T0" -cf "${ARTIFACT_NAME}.tar.zst" -C "./" "gcc-${ARCH}/"
     - echo "TAG_NAME=${DATE_STR}" > build.env
+    - echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> build.env
   artifacts:
     paths:
       - "*.tar.zst"
