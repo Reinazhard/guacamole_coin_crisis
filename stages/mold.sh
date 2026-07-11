@@ -18,6 +18,8 @@ install_mold() {
     fi
   fi
 
+  export BUILD_DIR="${WORK_DIR}/builds"
+  mkdir -p "${BUILD_DIR}"
   safe_cd "${BUILD_DIR}"
   [[ -d build-mold ]] && rm -rf build-mold
 
