@@ -8,7 +8,7 @@ _configure_gcc() {
   local pass_name="$2"
   shift 2
 
-  run_log "gcc-${pass_name}-configure" "../${src_dir}/configure" \
+  run_log "gcc-${pass_name}-configure" "${src_dir}/configure" \
       --target="${TARGET}" \
       --prefix="${PREFIX}" \
       --with-sysroot="${SYSROOT}" \
