@@ -43,6 +43,9 @@ source "${SCRIPT_DIR}/lib/flags.sh"
 # 5. Source lib/targets.sh
 source "${SCRIPT_DIR}/lib/targets.sh"
 
+# 5.1 Source lib/context.sh
+source "${SCRIPT_DIR}/lib/context.sh"
+
 # 6. Set variables and environment
 export WORK_DIR="$PWD"
 export PREFIX="${WORK_DIR}/gcc-${ARCH}"
@@ -125,10 +128,10 @@ if [[ "${STAGES[0]}" == "all" ]]; then
   print_summary
 else
   for stage in "${STAGES[@]}"; do
-    if declare -f "$stage" > /dev/null; then
+    if is_stage_registered "$stage"; then
       $stage
     else
-      die "Unknown stage: $stage"
+      die "Unknown or unregistered stage: $stage"
     fi
   done
 fi

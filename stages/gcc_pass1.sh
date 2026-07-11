@@ -6,11 +6,12 @@
 source "${SCRIPT_DIR}/stages/_gcc_common.sh"
 
 build_gcc_pass1() {
+  require_build_context
   header "STAGE 3: GCC PASS 1 (BOOTSTRAP C COMPILER)"
-  safe_cd "${WORK_DIR}"
+  safe_cd "${BUILD_DIR}"
   mkdir -p build-gcc-pass1 && safe_cd build-gcc-pass1
 
-  _configure_gcc "gcc-src" "pass1" \
+  _configure_gcc "${WORK_DIR}/gcc-src" "pass1" \
       --without-headers \
       --with-newlib \
       --disable-shared \
@@ -32,3 +33,4 @@ build_gcc_pass1() {
   safe_cd "${WORK_DIR}"
   ok "GCC Pass 1 done  [$(elapsed)]"
 }
+register_stage "build_gcc_pass1" "Build GCC Pass 1 (C/C++ only)"

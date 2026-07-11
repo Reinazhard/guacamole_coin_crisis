@@ -126,3 +126,4 @@ download_resources() {
   fi
   ok "All sources ready  [$(elapsed)]"
 }
+register_stage "download_resources" "Download and extract all sources"

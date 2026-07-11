@@ -112,3 +112,4 @@ strip_binaries() {
 
   ok "Stripping process completed."
 }
+register_stage "strip_binaries" "Strip debug symbols from toolchain"

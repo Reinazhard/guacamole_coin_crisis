@@ -58,3 +58,4 @@ validate_elf() {
 
   ok "ELF validation successful."
 }
+register_stage "validate_elf" "Validate ELF binaries"

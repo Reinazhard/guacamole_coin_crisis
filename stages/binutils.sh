@@ -3,11 +3,12 @@
 # Stage 1: Build Binutils
 
 build_binutils() {
+  require_build_context
   header "STAGE 1: BINUTILS"
-  safe_cd "${WORK_DIR}"
+  safe_cd "${BUILD_DIR}"
   mkdir -p build-binutils && safe_cd build-binutils
 
-  run_log "binutils-configure" ../binutils-src/configure \
+  run_log "binutils-configure" "${WORK_DIR}/binutils-src/configure" \
       --target="${TARGET}" \
       --prefix="${PREFIX}" \
       --with-sysroot="${SYSROOT}" \
@@ -37,3 +38,4 @@ build_binutils() {
   safe_cd "${WORK_DIR}"
   ok "Binutils done  [$(elapsed)]"
 }
+register_stage "build_binutils" "Build binutils"

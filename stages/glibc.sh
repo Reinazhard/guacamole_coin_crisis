@@ -3,15 +3,16 @@
 # Stage 4: Build Glibc
 
 build_glibc() {
+  require_build_context
   header "STAGE 4: GLIBC"
-  safe_cd "${WORK_DIR}"
+  safe_cd "${BUILD_DIR}"
   mkdir -p build-glibc && safe_cd build-glibc
 
   # glibc cannot be compiled with external _FORTIFY_SOURCE as it implements it
   local glibc_cflags="${TARGET_CFLAGS//-Wp,-D_FORTIFY_SOURCE=3/}"
   local glibc_cxxflags="${TARGET_CXXFLAGS//-Wp,-D_FORTIFY_SOURCE=3/}"
 
-  run_log "glibc-configure" ../glibc-${GLIBC_VER}/configure \
+  run_log "glibc-configure" "${WORK_DIR}/glibc-${GLIBC_VER}/configure" \
       --host="${TARGET}" \
       --build="${BUILD_TRIPLE}" \
       --prefix="/usr" \
@@ -45,3 +46,4 @@ build_glibc() {
   safe_cd "${WORK_DIR}"
   ok "Glibc done  [$(elapsed)]"
 }
+register_stage "build_glibc" "Build Glibc"

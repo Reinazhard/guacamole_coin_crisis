@@ -53,3 +53,4 @@ print_summary() {
   fi
   echo
 }
+register_stage "print_summary" "Print build summary"

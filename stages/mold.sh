@@ -3,6 +3,7 @@
 # Stage 6: Install Mold linker
 
 install_mold() {
+  require_context WORK_DIR PREFIX MOLD_BRANCH TARGET JOBS
   header "STAGE 6: MOLD LINKER"
   command -v cmake &>/dev/null || die "cmake required for mold stage"
 
@@ -37,3 +38,4 @@ install_mold() {
   safe_cd "${WORK_DIR}"
   ok "Mold linker installed  [$(elapsed)]"
 }
+register_stage "install_mold" "Build and install Mold linker"

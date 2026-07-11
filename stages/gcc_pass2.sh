@@ -15,6 +15,7 @@ GCC_PASS2_FLAGS=(
 )
 
 build_gcc_pass2() {
+  require_build_context
   header "STAGE 5: GCC PASS 2 (PGO COMPILER)"
 
   local PROFILE_DIR="${WORK_DIR}/pgo-profiles"
@@ -27,11 +28,11 @@ build_gcc_pass2() {
 
   # ── Phase 1: Build instrumented compiler ──────────────────────
   log "Phase 1/3: Building instrumented compiler..."
-  safe_cd "${WORK_DIR}"
+  safe_cd "${BUILD_DIR}"
   [[ -d build-gcc-pgo-instr ]] && rm -rf build-gcc-pgo-instr
   mkdir -p build-gcc-pgo-instr && safe_cd build-gcc-pgo-instr
 
-  _configure_gcc "gcc-src" "pass2-pgo-instr" "${GCC_PASS2_FLAGS[@]}" \
+  _configure_gcc "${WORK_DIR}/gcc-src" "pass2-pgo-instr" "${GCC_PASS2_FLAGS[@]}" \
       CFLAGS="${HOST_CFLAGS} -fprofile-generate=${PROFILE_DIR}" \
       CXXFLAGS="${HOST_CXXFLAGS} -fprofile-generate=${PROFILE_DIR}" \
       LDFLAGS="-static-libstdc++ -static-libgcc ${HOST_LDFLAGS} -fprofile-generate=${PROFILE_DIR}"
@@ -65,7 +66,7 @@ build_gcc_pass2() {
 
   # ── Phase 3: Rebuild with collected profiles ──────────────────
   log "Phase 3/3: Rebuilding compiler with PGO profile data..."
-  safe_cd "${WORK_DIR}"
+  safe_cd "${BUILD_DIR}"
 
   if ! $DRY_RUN; then
     rm -rf "${PREFIX:?}/lib/gcc" "${PREFIX}/libexec" \
@@ -86,7 +87,7 @@ build_gcc_pass2() {
   [[ -d build-gcc-pgo-final ]] && rm -rf build-gcc-pgo-final
   mkdir -p build-gcc-pgo-final && safe_cd build-gcc-pgo-final
 
-  _configure_gcc "gcc-src" "pass2-pgo-final" "${GCC_PASS2_FLAGS[@]}" \
+  _configure_gcc "${WORK_DIR}/gcc-src" "pass2-pgo-final" "${GCC_PASS2_FLAGS[@]}" \
       CFLAGS="${HOST_CFLAGS} -fprofile-use=${PROFILE_DIR} -fprofile-correction -Wno-missing-profile" \
       CXXFLAGS="${HOST_CXXFLAGS} -fprofile-use=${PROFILE_DIR} -fprofile-correction -Wno-missing-profile" \
       LDFLAGS="-static-libstdc++ -static-libgcc ${HOST_LDFLAGS} -fuse-ld=bfd -fprofile-use=${PROFILE_DIR}"
@@ -97,3 +98,4 @@ build_gcc_pass2() {
   safe_cd "${WORK_DIR}"
   ok "Phase 3 complete: PGO-optimized compiler installed  [$(elapsed)]"
 }
+register_stage "build_gcc_pass2" "Build GCC Pass 2 (with PGO)"

@@ -3,18 +3,12 @@
 # Stage: Clean build environment
 
 clean() {
+  require_context WORK_DIR
   header "CLEAN"
-  local dirs=(
-    build-binutils build-gcc-pass1 build-glibc
-    build-gcc-pgo-instr build-gcc-pgo-final build-mold
-    pgo-profiles
-  )
-  for d in "${dirs[@]}"; do
-    if [[ -d "${WORK_DIR}/${d}" ]]; then
-      log "Removing ${d}..."
-      rm -rf "${WORK_DIR:?}/${d}"
-    fi
-  done
+
+  log "Removing builds directory..."
+  rm -rf "${WORK_DIR:?}/builds"
+  rm -rf "${WORK_DIR:?}/pgo-profiles"
 
   if [[ "${CLEAN_SOURCES:-false}" == "true" ]]; then
     warn "CLEAN_SOURCES=true: removing source trees and downloads..."
@@ -31,3 +25,4 @@ clean() {
   fi
   ok "Clean done  [$(elapsed)]"
 }
+register_stage "clean" "Clean build environment"
