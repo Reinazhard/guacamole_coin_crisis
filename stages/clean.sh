@@ -9,7 +9,6 @@ clean() {
   log "Removing builds directory..."
   rm -rf "${WORK_DIR:?}/builds"
   rm -rf "${WORK_DIR:?}/pgo-profiles"
-  rm -rf "${WORK_DIR:?}/mold-bin"
 
   if [[ "${CLEAN_SOURCES:-false}" == "true" ]]; then
     warn "CLEAN_SOURCES=true: removing source trees and downloads..."
