@@ -70,7 +70,18 @@ publish-release:
     - if: $CI_PIPELINE_SOURCE != "merge_request_event"
   script:
     - echo "Creating release for tag ${TAG_NAME}"
+    - |
+      LINKS="[]"
+      for f in *.tar.zst; do
+        [ -f "$f" ] || continue
+        LINKS=$(printf '%s' "$LINKS" | sed 's/\]$//')
+        [ "$LINKS" != "[" ] && LINKS="${LINKS},"
+        LINKS="${LINKS}{\"name\":\"${f}\",\"url\":\"${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_REF_SLUG}/raw/${f}?job=build-toolchain\"}]"
+      done
+      release-cli create \
+        --name "Toolchain Release ${TAG_NAME}" \
+        --tag-name "${TAG_NAME}" \
+        --description "./release_notes.txt" \
+        --assets-link "${LINKS}"
   release:
-    name: 'Toolchain Release ${TAG_NAME}'
-    description: './release_notes.txt'
     tag_name: '${TAG_NAME}'
