@@ -18,16 +18,26 @@ install_mold() {
     fi
   fi
 
-  safe_cd "${WORK_DIR}"
-  [[ -d build-mold ]] && rm -rf build-mold
+  safe_cd "${BUILD_DIR}"
+  
+  if [[ -x "${WORK_DIR}/mold-bin/mold" ]]; then
+    log "Cached mold binary found. Skipping build."
+  else
+    [[ -d build-mold ]] && rm -rf build-mold
+    run_log "mold-cmake" cmake -B build-mold -S "${WORK_DIR}/mold-src" \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DMOLD_MOSTLY_STATIC=ON
 
-  run_log "mold-cmake" cmake -B build-mold -S mold-src \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
-    -DMOLD_MOSTLY_STATIC=ON
+    run_log "mold-build" cmake --build build-mold -j${JOBS}
+    
+    # Save the compiled binary to a cacheable location
+    mkdir -p "${WORK_DIR}/mold-bin"
+    cp build-mold/mold "${WORK_DIR}/mold-bin/"
+  fi
 
-  run_log "mold-build" cmake --build build-mold -j${JOBS}
-  run_log "mold-install" cmake --install build-mold
+  # Install the binary from the cache
+  mkdir -p "${PREFIX}/bin"
+  cp "${WORK_DIR}/mold-bin/mold" "${PREFIX}/bin/"
 
   # Create symlinks for GCC -fuse-ld=mold lookup
   if ! $DRY_RUN; then

@@ -18,6 +18,7 @@ build-toolchain:
     paths:
       - sources/
       - .ccache/
+      - mold-bin/
   parallel:
     matrix:
       - ARCH: "arm64"
