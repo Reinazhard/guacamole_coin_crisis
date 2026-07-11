@@ -26,7 +26,8 @@ install_mold() {
   run_log "mold-cmake" cmake -B build-mold -S "${WORK_DIR}/mold-src" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
-    -DMOLD_MOSTLY_STATIC=ON
+    -DMOLD_MOSTLY_STATIC=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_BLAKE3=ON
 
   run_log "mold-build" cmake --build build-mold -j${JOBS}
   run_log "mold-install" cmake --install build-mold
