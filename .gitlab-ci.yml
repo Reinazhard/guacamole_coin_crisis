@@ -91,5 +91,3 @@ publish-release:
         --tag-name "${TAG_NAME}" \
         --description "./release_notes.txt" \
         --assets-link "${LINKS}"
-  release:
-    tag_name: '${TAG_NAME}'
