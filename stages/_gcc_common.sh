@@ -8,9 +8,13 @@ _configure_gcc() {
   local pass_name="$2"
   shift 2
 
+  local gcc_ver; gcc_ver=$(cat "${src_dir}/BASE-VER")
+  local gcc_sha; gcc_sha=$(git -C "${src_dir}" rev-parse HEAD 2>/dev/null || echo "unknown")
+
   run_log "gcc-${pass_name}-configure" "${src_dir}/configure" \
       --target="${TARGET}" \
       --prefix="${PREFIX}" \
+      --with-pkgversion="GCC ${gcc_ver}+${gcc_sha:0:12}" \
       --with-sysroot="${SYSROOT}" \
       --with-build-sysroot="${SYSROOT}" \
       --build="${BUILD_TRIPLE}" \
